@@ -10,7 +10,8 @@
     "webapp:build": "node scripts/build-webapp.mjs",
     "webapp:dev": "node scripts/dev-webapp.mjs",
     "webapp:deploy": "node scripts/deploy-webapp.mjs",
-    "decks:check": "node scripts/check-decks.mjs"
+    "decks:check": "node scripts/check-decks.mjs",
+    "test": "node --import tsx --test test/*.test.ts"
   },
   "dependencies": {
     "dotenv": "^18.0.0",

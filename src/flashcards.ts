@@ -4,6 +4,7 @@
 // файлы, ни в лог), а неактивные записи удаляются по таймеру.
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { AUDIO_RE, DECK_ID_RE } from "./deckValidate.js";
 import { hasTones, toneVariants } from "./pinyin.js";
 import { shuffle } from "./util.js";
 
@@ -97,7 +98,6 @@ export interface Session {
 const decksDir = join(process.cwd(), "data", "decks");
 
 const isText = (v: unknown): v is string => typeof v === "string" && v.trim() !== "";
-const AUDIO_RE = /^(?:[A-Za-z0-9_-]{20,}|audio\/[A-Za-z0-9._-]+\.(?:mp3|ogg|oga|opus|m4a|wav))$/;
 
 function validOptions(item: { options?: unknown; answer?: unknown }): boolean {
   const { options, answer } = item;
@@ -173,6 +173,53 @@ function loadDecks(): Map<string, Deck> {
 }
 
 export const decks = loadDecks();
+
+// Занятия и прогресс по изменённой колоде сбрасываются: они хранят номера заданий,
+// которые после правки могут указывать на другие карточки или уже не существовать.
+function dropDeckState(id: string): void {
+  for (const [user, s] of sessions) if (s.deckId === id) sessions.delete(user);
+  for (const [user, p] of progress) if (p.deckId === id) progress.delete(user);
+}
+
+// Немедленно обновляет колоду в памяти после сохранения из редактора (null — удалить).
+export function applyDeckChange(id: string, file: unknown | null): void {
+  dropDeckState(id);
+  if (file === null) {
+    decks.delete(id);
+    return;
+  }
+  const deck = parseDeck(id, `${id}.json`, file);
+  if (deck) decks.set(id, deck);
+  else decks.delete(id);
+}
+
+// При старте берёт актуальные колоды с сайта мини-приложения: встроенные в сборку колоды
+// могут быть старее, ведь правки учителя не пересобирают бота. Не вышло — остаются встроенные.
+export async function refreshDecksFromSite(baseUrl: string): Promise<void> {
+  try {
+    const get = async (path: string) => {
+      const res = await fetch(new URL(path, baseUrl), { signal: AbortSignal.timeout(10_000), cache: "no-store" });
+      if (!res.ok) throw new Error(`${path}: ${res.status}`);
+      return res.json();
+    };
+    const index = (await get("decks/index.json")) as { id?: unknown }[];
+    const fresh = new Map<string, Deck>();
+    for (const entry of index) {
+      if (typeof entry.id !== "string" || !DECK_ID_RE.test(entry.id)) continue;
+      const deck = parseDeck(entry.id, `${entry.id}.json`, await get(`decks/${entry.id}.json`));
+      if (deck) fresh.set(entry.id, deck);
+    }
+    if (fresh.size === 0) throw new Error("на сайте нет колод");
+    for (const id of new Set([...decks.keys(), ...fresh.keys()])) {
+      const deck = fresh.get(id);
+      if (deck) decks.set(id, deck);
+      else decks.delete(id);
+      dropDeckState(id);
+    }
+  } catch (e) {
+    console.error("Не удалось обновить колоды с сайта, остаются встроенные:", e instanceof Error ? e.message : String(e));
+  }
+}
 
 const MAX_OPTIONS = 4;
 const MATCH_PAIRS = 5;
@@ -272,7 +319,12 @@ export function startSession(
 
 export function getSession(userId: number): Session | undefined {
   const session = sessions.get(userId);
-  if (session) session.touched = Date.now();
+  if (!session) return undefined;
+  if (!decks.has(session.deckId)) {
+    sessions.delete(userId);
+    return undefined;
+  }
+  session.touched = Date.now();
   return session;
 }
 

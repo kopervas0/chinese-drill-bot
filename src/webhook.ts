@@ -1,5 +1,5 @@
 import { createHash, timingSafeEqual } from "node:crypto";
-import { createServer, Server } from "node:http";
+import { createServer, IncomingMessage, Server, ServerResponse } from "node:http";
 import { Bot, webhookCallback } from "grammy";
 
 const MAX_BODY_BYTES = 1_000_000;
@@ -18,11 +18,20 @@ function safeEqual(a: string | undefined, b: string): boolean {
   return x.length === y.length && timingSafeEqual(x, y);
 }
 
+export type ApiHandler = (req: IncomingMessage, res: ServerResponse) => Promise<void>;
+
 // HTTP-сервер для вебхука. Секрет и размер тела проверяются до разбора запроса.
-export function createWebhookServer(bot: Bot, secretToken: string): Server {
+// Необязательный api обслуживает запросы /api/* (редактор для учителя).
+export function createWebhookServer(bot: Bot, secretToken: string, api?: ApiHandler): Server {
   const handle = webhookCallback(bot, "http", { secretToken });
 
   return createServer((req, res) => {
+    if (api && (req.url === "/api" || req.url?.startsWith("/api/") || req.url?.startsWith("/api?"))) {
+      api(req, res).catch(() => {
+        if (!res.headersSent) res.writeHead(500).end();
+      });
+      return;
+    }
     if (req.method === "GET" && (req.url === "/" || req.url === "/healthz")) {
       res.writeHead(200, { "Content-Type": "text/plain" }).end("ok");
       return;
