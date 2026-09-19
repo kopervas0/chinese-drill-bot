@@ -8,8 +8,14 @@ export const MODES = {
   tones: { label: "Тоны", hint: "Выберите верный пиньинь", glyph: "声" },
   match: { label: "Найди пары", hint: "Иероглиф ↔ перевод", glyph: "配" },
   listen: { label: "На слух", hint: "Услышьте и выберите перевод", glyph: "听" },
+  tests: { label: "Тесты", hint: "Вопросы с вариантами ответа", glyph: "测" },
+  pairs: { label: "Свои пары", hint: "Соедините подходящие", glyph: "对" },
+  cloze: { label: "Заполни пропуск", hint: "Выберите пропущенное слово", glyph: "填" },
 };
-export const MODE_ORDER = ["cards", "quiz", "quizrev", "tones", "match", "listen"];
+export const MODE_ORDER = ["cards", "quiz", "quizrev", "tones", "match", "listen", "tests", "pairs", "cloze"];
+
+// Свои задания учителя: прогресс «выучено» по ним не ведётся.
+export const isTaskMode = (mode) => mode === "tests" || mode === "pairs" || mode === "cloze";
 
 const MAX_OPTIONS = 4;
 const MATCH_PAIRS = 5;
@@ -115,9 +121,45 @@ export function pinyinTokens(pinyin) {
   return out;
 }
 
+// ---------- колода ----------
+
+const isText = (v) => typeof v === "string" && v.trim() !== "";
+
+function okOptions(item) {
+  const { options, answer } = item;
+  return (
+    Array.isArray(options) &&
+    options.length >= 2 &&
+    options.length <= 6 &&
+    options.every(isText) &&
+    new Set(options).size === options.length &&
+    Number.isInteger(answer) &&
+    answer >= 0 &&
+    answer < options.length
+  );
+}
+
+// Те же правила отбора, что и в боте (src/flashcards.ts): битые задания отбрасываются,
+// поэтому номера карточек (а с ними и код прогресса) в боте и в приложении совпадают.
+export function normalizeDeck(raw) {
+  const arr = (v) => (Array.isArray(v) ? v : []);
+  return {
+    id: raw.id,
+    name: raw.name,
+    cards: arr(raw.cards).filter((c) => c && isText(c.hanzi) && isText(c.pinyin) && isText(c.translation)),
+    tests: arr(raw.tests).filter((t) => t && isText(t.question) && okOptions(t)),
+    pairs: arr(raw.pairs).filter((p) => p && isText(p.left) && isText(p.right)),
+    cloze: arr(raw.cloze).filter((c) => c && isText(c.text) && c.text.includes("___") && okOptions(c)),
+  };
+}
+
 // ---------- сессия ----------
 
-export function eligible(deck, mode, opts = {}) {
+// Индексы заданий, доступных в режиме (в массиве, который режим использует).
+export function eligible(deck, mode) {
+  if (mode === "tests") return deck.tests.map((_, i) => i);
+  if (mode === "pairs") return deck.pairs.map((_, i) => i);
+  if (mode === "cloze") return deck.cloze.map((_, i) => i);
   return deck.cards.flatMap((card, i) => {
     if (mode === "tones") return hasTones(card.pinyin) ? [i] : [];
     return [i];
@@ -127,7 +169,7 @@ export function eligible(deck, mode, opts = {}) {
 export function canStart(deck, mode, opts = {}) {
   const n = eligible(deck, mode).length;
   if (mode === "listen") return !!opts.tts && n >= 2;
-  if (mode === "cards" || mode === "tones") return n >= 1;
+  if (mode === "cards" || mode === "tones" || mode === "tests" || mode === "cloze") return n >= 1;
   return n >= 2;
 }
 
@@ -170,7 +212,7 @@ export function createSession(deck, mode, limit, known) {
     mistakes: 0,
     match: null,
   };
-  if (mode === "match") {
+  if (mode === "match" || mode === "pairs") {
     session.match = { rounds: buildRounds(order), round: 0, left: [], right: [], done: new Set(), picked: null };
     setupRound(session.match);
   }
@@ -205,9 +247,13 @@ function pickDistinct(pool, exclude, count) {
   return shuffle([...new Set(pool)].filter((label) => label !== exclude)).slice(0, count);
 }
 
-// Возвращает варианты ответа для текущего вопроса (квиз, тоны, на слух).
+// Возвращает варианты ответа для текущего вопроса (квиз, тоны, на слух, тесты, пропуски).
 export function buildOptions(session, deck) {
   const index = currentIndex(session);
+  if (session.mode === "tests" || session.mode === "cloze") {
+    const item = session.mode === "tests" ? deck.tests[index] : deck.cloze[index];
+    return shuffle(item.options.map((label, i) => ({ label, correct: i === item.answer })));
+  }
   const card = deck.cards[index];
   const others = deck.cards.filter((_, i) => i !== index);
   const n = MAX_OPTIONS - 1;
@@ -268,12 +314,37 @@ export function nextRound(session) {
   return true;
 }
 
+// Подписи левой и правой плитки матч-игры для задания с индексом i.
+export function matchTexts(session, deck, i) {
+  if (session.mode === "pairs") return deck.pairs[i];
+  const card = deck.cards[i];
+  return { left: card.hanzi, right: card.translation };
+}
+
+export function fillBlank(item) {
+  return item.text.replace("___", item.options[item.answer]);
+}
+
+// Что показать в итоге про ошибочное задание i: карточка или короткая строка.
+export function missedInfo(session, deck, i) {
+  if (session.mode === "tests") {
+    const t = deck.tests[i];
+    return { title: t.question, sub: `Ответ: ${t.options[t.answer]}` };
+  }
+  if (session.mode === "pairs") return { title: `${deck.pairs[i].left} — ${deck.pairs[i].right}` };
+  if (session.mode === "cloze") return { title: fillBlank(deck.cloze[i]), sub: deck.cloze[i].translation };
+  return deck.cards[i];
+}
+
 // Итог занятия: выученное = прежнее − ошибочные + отвеченные верно с первого раза.
+// Для своих заданий выученное не меняется.
 export function finishSession(session, prevKnown) {
+  const answered = session.right.size + session.missed.size;
   const known = new Set(prevKnown);
+  if (isTaskMode(session.mode)) return { known, answered };
   for (const i of session.missed) known.delete(i);
   for (const i of session.right) known.add(i);
-  return { known, answered: session.right.size + session.missed.size };
+  return { known, answered };
 }
 
 // ---------- код прогресса (совместим с ботом) ----------

@@ -9,10 +9,15 @@ import {
   deckSignature,
   eligible,
   encodeProgress,
+  fillBlank,
   finishSession,
   isFinished,
+  isTaskMode,
   matchPick,
+  matchTexts,
+  missedInfo,
   nextRound,
+  normalizeDeck,
   pinyinTokens,
   record,
   roundComplete,
@@ -149,6 +154,15 @@ const knownOf = (deck) => state.known.get(deck.id) ?? new Set();
 
 // ---------- главный экран ----------
 
+const taskCount = (deck) => deck.tests.length + deck.pairs.length + deck.cloze.length;
+
+function deckMeta(deck) {
+  const parts = [];
+  if (deck.cards.length) parts.push(`Выучено ${knownOf(deck).size} из ${deck.cards.length}`);
+  if (taskCount(deck)) parts.push(`заданий: ${taskCount(deck)}`);
+  return parts.join(" · ");
+}
+
 function renderHome() {
   window.scrollTo(0, 0);
   state.screen = "home";
@@ -156,18 +170,18 @@ function renderHome() {
   setBack(false);
   const cards = state.decks
     .map((deck, i) => {
-      const known = knownOf(deck).size;
-      const pct = Math.round((known / deck.cards.length) * 100);
+      const hasCards = deck.cards.length > 0;
+      const pct = hasCards ? Math.round((knownOf(deck).size / deck.cards.length) * 100) : 0;
       return `<div class="deck" role="button" tabindex="0" data-act="open" data-id="${esc(deck.id)}" style="animation-delay:${i * 60}ms">
         <div class="deck-top">
           <div>
             <div class="deck-name">${esc(deck.name)}</div>
-            <div class="deck-meta">Выучено ${known} из ${deck.cards.length}</div>
+            <div class="deck-meta">${esc(deckMeta(deck))}</div>
           </div>
-          <div class="deck-glyph">${esc(deck.cards[0]?.hanzi ?? "字")}</div>
+          <div class="deck-glyph">${esc(deck.cards[0]?.hanzi ?? "题")}</div>
         </div>
-        <div class="bar"><i style="width:${pct}%"></i></div>
-        <button class="link" data-act="code" data-id="${esc(deck.id)}">Код прогресса</button>
+        ${hasCards ? `<div class="bar"><i style="width:${pct}%"></i></div>
+        <button class="link" data-act="code" data-id="${esc(deck.id)}">Код прогресса</button>` : ""}
       </div>`;
     })
     .join("");
@@ -226,15 +240,19 @@ async function drawSheet() {
 
   const opts = { tts: state.tts };
   const modes = MODE_ORDER.filter((m) => canStart(deck, m, opts));
-  if (!modes.includes(sh.mode)) sh.mode = "cards";
+  if (!modes.includes(sh.mode)) sh.mode = modes[0];
   const total = eligible(deck, sh.mode).length;
   if (sh.limit && sh.limit >= total) sh.limit = 0;
   const lengths = [10, 20].filter((n) => n < total);
   const known = knownOf(deck).size;
+  const noun = isTaskMode(sh.mode) ? "заданий" : "карточек";
+  const sub = deck.cards.length
+    ? `Выучено ${known} из ${deck.cards.length}${known ? ". Сначала пойдут новые слова." : ""}`
+    : `Заданий: ${taskCount(deck)}`;
 
   panel.innerHTML = `<div class="grab"></div>
     <h2>${esc(deck.name)}</h2>
-    <p class="sub">Выучено ${known} из ${deck.cards.length}${known ? ". Сначала пойдут новые слова." : ""}</p>
+    <p class="sub">${esc(sub)}</p>
     <div class="label">Формат</div>
     <div class="modes">${modes
       .map(
@@ -243,7 +261,7 @@ async function drawSheet() {
         </button>`,
       )
       .join("")}</div>
-    <div class="label">Сколько карточек</div>
+    <div class="label">Сколько ${noun}</div>
     <div class="seg">${[...lengths, 0]
       .map(
         (n) =>
@@ -280,11 +298,13 @@ function renderSession() {
   showQuestion();
 }
 
+const isMatchMode = (s) => s.mode === "match" || s.mode === "pairs";
+
 function updateTop() {
   const s = state.session;
   let frac;
   let label;
-  if (s.mode === "match") {
+  if (isMatchMode(s)) {
     const m = s.match;
     frac = (m.round + m.done.size / m.rounds[m.round].length) / m.rounds.length;
     label = `${Math.min(m.round + 1, m.rounds.length)}/${m.rounds.length}`;
@@ -307,7 +327,7 @@ function freshStage() {
 function showQuestion() {
   window.scrollTo(0, 0);
   const s = state.session;
-  if (s.mode !== "match" && isFinished(s)) {
+  if (!isMatchMode(s) && isFinished(s)) {
     finish();
     return;
   }
@@ -315,7 +335,7 @@ function showQuestion() {
   state.busy = false;
   updateTop();
   const stage = freshStage();
-  if (s.mode === "match") renderMatch(stage);
+  if (isMatchMode(s)) renderMatch(stage);
   else if (s.mode === "cards") renderCard(stage);
   else renderChoice(stage);
 }
@@ -423,69 +443,111 @@ function answerCard(correct) {
 
 // --- квиз, тоны, на слух ---
 
+// Короткий китайский текст (иероглифы крупным шрифтом с засечками)
+const CJK_SHORT = /^[一-鿿]{1,4}$/;
+
+// Аудио задания: путь на сайте (audio/имя.mp3) играем прямо здесь, file_id голосового
+// из Telegram в приложении воспроизвести нельзя, он доступен только боту.
+function audioBlock(audio) {
+  if (!audio) return "";
+  if (audio.includes("/")) {
+    return `<button class="speak big" data-act="play" data-src="${esc(audio)}" aria-label="Прослушать">${ICON_SPEAKER}</button>`;
+  }
+  return `<div class="prompt-note">Аудио к этому заданию доступно в боте</div>`;
+}
+
 function renderChoice(stage) {
   const s = state.session;
-  const card = state.deck.cards[currentIndex(s)];
+  const idx = currentIndex(s);
   const options = buildOptions(s, state.deck);
   state.opts = options;
 
   let head;
-  if (s.mode === "quiz") {
-    head = `<div class="center-col"><div class="hanzi md">${esc(card.hanzi)}</div>
-      <div class="pinyin">${pinyinHtml(card.pinyin)}</div>${speakBtn(card.hanzi)}</div>
-      <div class="prompt-note">Выберите перевод</div>`;
-  } else if (s.mode === "quizrev") {
-    head = `<div class="center-col"><div class="prompt-tr">${esc(card.translation)}</div></div>
-      <div class="prompt-note">Выберите иероглиф</div>`;
-  } else if (s.mode === "tones") {
-    head = `<div class="center-col"><div class="hanzi md">${esc(card.hanzi)}</div>
-      <div class="translation">${esc(card.translation)}</div></div>
-      <div class="prompt-note">Выберите правильный пиньинь</div>`;
+  let han = false;
+  if (s.mode === "tests") {
+    const t = state.deck.tests[idx];
+    head = `<div class="center-col"><div class="prompt-tr">${esc(t.question)}</div>${audioBlock(t.audio)}</div>
+      <div class="prompt-note">Выберите ответ</div>`;
+    han = options.every((o) => CJK_SHORT.test(o.label));
+  } else if (s.mode === "cloze") {
+    const c = state.deck.cloze[idx];
+    head = `<div class="center-col"><div class="prompt-tr">${esc(c.text).replace("___", '<span class="blank"></span>')}</div></div>
+      <div class="prompt-note">Выберите пропущенное</div>`;
+    han = options.every((o) => CJK_SHORT.test(o.label));
   } else {
-    head = `<div class="center-col"><button class="speak big" data-act="speak" data-t="${esc(card.hanzi)}" aria-label="Прослушать">${ICON_SPEAKER}</button></div>
-      <div class="prompt-note">Что вы услышали? Выберите перевод</div>`;
+    const card = state.deck.cards[idx];
+    han = s.mode === "quizrev";
+    if (s.mode === "quiz") {
+      head = `<div class="center-col"><div class="hanzi md">${esc(card.hanzi)}</div>
+        <div class="pinyin">${pinyinHtml(card.pinyin)}</div>${speakBtn(card.hanzi)}</div>
+        <div class="prompt-note">Выберите перевод</div>`;
+    } else if (s.mode === "quizrev") {
+      head = `<div class="center-col"><div class="prompt-tr">${esc(card.translation)}</div></div>
+        <div class="prompt-note">Выберите иероглиф</div>`;
+    } else if (s.mode === "tones") {
+      head = `<div class="center-col"><div class="hanzi md">${esc(card.hanzi)}</div>
+        <div class="translation">${esc(card.translation)}</div></div>
+        <div class="prompt-note">Выберите правильный пиньинь</div>`;
+    } else {
+      head = `<div class="center-col"><button class="speak big" data-act="speak" data-t="${esc(card.hanzi)}" aria-label="Прослушать">${ICON_SPEAKER}</button></div>
+        <div class="prompt-note">Что вы услышали? Выберите перевод</div>`;
+    }
   }
 
-  const han = s.mode === "quizrev" ? " han" : "";
   stage.innerHTML = `${head}
     <div id="fb"></div>
     <div class="opts">${options
-      .map((o, i) => `<button class="opt${han}" data-act="pick" data-i="${i}">${esc(o.label)}</button>`)
+      .map((o, i) => `<button class="opt${han ? " han" : ""}" data-act="pick" data-i="${i}">${esc(o.label)}</button>`)
       .join("")}</div>`;
-  if (s.mode === "listen") setTimeout(() => speak(card.hanzi), 250);
+  if (s.mode === "listen") setTimeout(() => speak(state.deck.cards[idx].hanzi), 250);
 }
 
 function pick(i) {
   if (state.answered) return;
   state.answered = true;
   const s = state.session;
-  const card = state.deck.cards[currentIndex(s)];
+  const idx = currentIndex(s);
   const option = state.opts[i];
   record(s, option.correct);
 
-  document.querySelectorAll(".opt").forEach((el, idx) => {
-    const o = state.opts[idx];
+  document.querySelectorAll(".opt").forEach((el, n) => {
+    const o = state.opts[n];
     if (o.correct) el.classList.add("correct");
-    else if (idx === i) el.classList.add("wrong");
+    else if (n === i) el.classList.add("wrong");
     else el.classList.add("dim");
   });
 
+  // что показать после ответа: только то, чего ещё нет на экране
+  let reveal = "";
+  if (s.mode === "tests") {
+    const t = state.deck.tests[idx];
+    if (!option.correct) reveal += `<div class="translation">Правильный ответ: <b>${esc(t.options[t.answer])}</b></div>`;
+    if (t.explain) reveal += `<div class="prompt-note">${esc(t.explain)}</div>`;
+  } else if (s.mode === "cloze") {
+    const c = state.deck.cloze[idx];
+    if (!option.correct || c.translation) {
+      reveal = `<div class="prompt-tr">${esc(fillBlank(c))}</div>`;
+      if (c.translation) reveal += `<div class="translation">${esc(c.translation)}</div>`;
+    }
+  } else if (!option.correct) {
+    const card = state.deck.cards[idx];
+    if (s.mode === "quizrev" || s.mode === "tones") {
+      reveal = `<div class="pinyin">${pinyinHtml(card.pinyin)}</div>`;
+    } else if (s.mode === "listen") {
+      reveal = `<div class="row"><div class="hanzi sm">${esc(card.hanzi)}</div></div>
+        <div class="pinyin">${pinyinHtml(card.pinyin)}</div>
+        <div class="translation">${esc(card.translation)}</div>`;
+    }
+  }
+
   if (option.correct) {
     haptic.ok();
-    setTimeout(advance, 800);
-    return;
-  }
-  haptic.err();
-  // показываем только то, чего ещё нет на экране
-  let reveal = "";
-  if (s.mode === "quizrev") {
-    reveal = `<div class="pinyin">${pinyinHtml(card.pinyin)}</div>`;
-  } else if (s.mode === "tones") {
-    reveal = `<div class="pinyin">${pinyinHtml(card.pinyin)}</div>`;
-  } else if (s.mode === "listen") {
-    reveal = `<div class="row"><div class="hanzi sm">${esc(card.hanzi)}</div></div>
-      <div class="pinyin">${pinyinHtml(card.pinyin)}</div>
-      <div class="translation">${esc(card.translation)}</div>`;
+    if (!reveal) {
+      setTimeout(advance, 800);
+      return;
+    }
+  } else {
+    haptic.err();
   }
   $("#fb").innerHTML = `${reveal ? `<div class="reveal">${reveal}</div>` : ""}
     <button class="btn primary" data-act="next" style="margin-top:12px">Дальше</button>`;
@@ -496,12 +558,13 @@ function pick(i) {
 
 function tileHtml(s, side, pos) {
   const m = s.match;
-  const card = (side === "l" ? m.left : m.right)[pos];
-  const c = state.deck.cards[card];
-  const cls = ["tile", side === "l" ? "han" : ""];
-  if (m.done.has(card)) cls.push("done");
-  if (m.picked && m.picked.side === side && m.picked.card === card) cls.push("sel");
-  const text = side === "l" ? c.hanzi : c.translation;
+  const item = (side === "l" ? m.left : m.right)[pos];
+  const t = matchTexts(s, state.deck, item);
+  const text = side === "l" ? t.left : t.right;
+  const cls = ["tile"];
+  if ((side === "l" && s.mode === "match") || CJK_SHORT.test(text)) cls.push("han");
+  if (m.done.has(item)) cls.push("done");
+  if (m.picked && m.picked.side === side && m.picked.card === item) cls.push("sel");
   return `<button class="${cls.join(" ")}" data-act="tile" data-side="${side}" data-pos="${pos}">${esc(text)}</button>`;
 }
 
@@ -557,11 +620,16 @@ async function finish() {
     renderHome();
     return;
   }
+  if (isTaskMode(s.mode)) {
+    renderResult(s, deck, null, answered, null);
+    return;
+  }
   await saveKnown(deck, known);
   const code = await encodeProgress(deck, known);
   renderResult(s, deck, known, answered, code);
 }
 
+// known и code равны null для своих заданий: прогресс «выучено» по ним не ведётся.
 function renderResult(s, deck, known, answered, code) {
   window.scrollTo(0, 0);
   state.screen = "result";
@@ -570,30 +638,37 @@ function renderResult(s, deck, known, answered, code) {
   const pct = Math.round(ratio * 100);
   const title =
     ratio >= 0.9 ? "Отлично!" : ratio >= 0.7 ? "Хороший результат" : ratio >= 0.4 ? "Неплохо, есть что повторить" : "Повторение всё исправит";
-  const missed = [...s.missed].map((i) => deck.cards[i]);
+  const missed = [...s.missed].map((i) => missedInfo(s, deck, i));
+  const missedRow = (m) =>
+    m.hanzi !== undefined
+      ? `<div class="m"><div class="h">${esc(m.hanzi)}</div>
+          <div class="p">${pinyinHtml(m.pinyin)}</div><div class="t">${esc(m.translation)}</div></div>`
+      : `<div class="m plain"><div class="p">${esc(m.title)}</div>${m.sub ? `<div class="t">${esc(m.sub)}</div>` : ""}</div>`;
   const missedHtml = missed.length
     ? `<div class="label">Стоит повторить</div><div class="missed">${missed
         .slice(0, 10)
-        .map(
-          (c) => `<div class="m"><div class="h">${esc(c.hanzi)}</div>
-            <div class="p">${pinyinHtml(c.pinyin)}</div><div class="t">${esc(c.translation)}</div></div>`,
-        )
+        .map(missedRow)
         .join("")}</div>${missed.length > 10 ? `<p class="sub">…и ещё ${missed.length - 10}</p>` : ""}`
     : "";
+  const knownHtml = known ? `<p class="sub">Выучено в колоде: ${known.size} из ${deck.cards.length}</p>` : "";
+  const codeHtml = code ? `<div class="label">Код прогресса</div><div class="codebox">${esc(code)}</div>` : "";
+  const copyBtn = code ? `<button class="btn ghost" data-act="copy" data-code="${esc(code)}">Скопировать код</button>` : "";
+  const footNote = code
+    ? "Прогресс уже сохранён на этом устройстве.<br />Код можно ввести в боте командой /code."
+    : "Задания не меняют прогресс «выучено».";
 
   app.innerHTML = `<div class="app"><div class="result">
     <div class="ring" style="--p:${pct}"><div><span>${s.right.size}/${answered}<small>с первого раза</small></span></div></div>
     <h2>${title}</h2>
-    <p class="sub">Выучено в колоде: ${known.size} из ${deck.cards.length}</p>
+    ${knownHtml}
     ${missedHtml}
-    <div class="label">Код прогресса</div>
-    <div class="codebox">${esc(code)}</div>
+    ${codeHtml}
     <div class="btns">
       <button class="btn primary" data-act="again-run">Ещё раз</button>
-      <button class="btn ghost" data-act="copy" data-code="${esc(code)}">Скопировать код</button>
+      ${copyBtn}
       <button class="btn ghost" data-act="home">К колодам</button>
     </div>
-    <p class="note" style="padding-top:8px">Прогресс уже сохранён на этом устройстве.<br />Код можно ввести в боте командой /code.</p>
+    <p class="note" style="padding-top:8px">${footNote}</p>
   </div></div>`;
   if (ratio >= 0.8) confetti();
 }
@@ -627,6 +702,17 @@ function setBack(visible) {
   const bb = tg?.BackButton;
   if (!bb) return;
   visible ? bb.show() : bb.hide();
+}
+
+let clip;
+function playClip(src) {
+  try {
+    clip?.pause();
+    clip = new Audio(src);
+    clip.play().catch(() => toast("Не удалось воспроизвести аудио"));
+  } catch {
+    toast("Не удалось воспроизвести аудио");
+  }
 }
 
 // ---------- события ----------
@@ -668,6 +754,7 @@ const actions = {
   next: () => advance(),
   tile: (el) => onTile(el.dataset.side, Number(el.dataset.pos)),
   speak: (el) => speak(el.dataset.t),
+  play: (el) => playClip(el.dataset.src),
   "again-run": () => begin(state.lastRun.deckId, state.lastRun.mode, state.lastRun.limit),
   home: () => renderHome(),
   reload: () => location.reload(),
@@ -708,7 +795,7 @@ async function boot() {
   try {
     const index = await (await fetch("decks/index.json")).json();
     state.decks = await Promise.all(
-      index.map(async (d) => ({ id: d.id, ...(await (await fetch(`decks/${d.id}.json`)).json()) })),
+      index.map(async (d) => normalizeDeck({ id: d.id, ...(await (await fetch(`decks/${d.id}.json`)).json()) })),
     );
     state.byId = new Map(state.decks.map((d) => [d.id, d]));
     await loadKnown();

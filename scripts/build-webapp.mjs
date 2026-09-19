@@ -14,7 +14,8 @@ const index = [];
 for (const file of readdirSync(src).filter((f) => f.endsWith(".json")).sort()) {
   copyFileSync(join(src, file), join(dst, file));
   const deck = JSON.parse(readFileSync(join(src, file), "utf-8"));
-  index.push({ id: file.replace(/\.json$/, ""), name: deck.name, count: deck.cards.length });
+  const count = ["cards", "tests", "pairs", "cloze"].reduce((n, key) => n + (Array.isArray(deck[key]) ? deck[key].length : 0), 0);
+  index.push({ id: file.replace(/\.json$/, ""), name: deck.name, count });
 }
 writeFileSync(join(dst, "index.json"), JSON.stringify(index));
 console.log(`webapp/decks: ${index.length} колод`);

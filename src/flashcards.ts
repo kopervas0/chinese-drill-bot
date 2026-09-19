@@ -16,13 +16,51 @@ export interface Card {
   audio?: string;
 }
 
+// Задание с вариантами ответа. audio: file_id голосового в Telegram (только для
+// бота) или путь вида audio/name.mp3 относительно сайта мини-приложения.
+export interface TestItem {
+  question: string;
+  options: string[];
+  answer: number;
+  explain?: string;
+  audio?: string;
+}
+
+export interface PairItem {
+  left: string;
+  right: string;
+}
+
+// Предложение с пропуском "___".
+export interface ClozeItem {
+  text: string;
+  options: string[];
+  answer: number;
+  translation?: string;
+}
+
 export interface Deck {
   id: string;
   name: string;
   cards: Card[];
+  tests: TestItem[];
+  pairs: PairItem[];
+  cloze: ClozeItem[];
 }
 
-export type Mode = "cards" | "quiz" | "quizrev" | "tones" | "listen" | "match";
+export type Mode =
+  | "cards"
+  | "quiz"
+  | "quizrev"
+  | "tones"
+  | "listen"
+  | "match"
+  | "tests"
+  | "pairs"
+  | "cloze";
+
+// Свои задания учителя: прогресс "выучено" по ним не ведётся.
+export const isTaskMode = (mode: Mode): boolean => mode === "tests" || mode === "pairs" || mode === "cloze";
 
 export interface Option {
   label: string;
@@ -58,6 +96,58 @@ export interface Session {
 
 const decksDir = join(process.cwd(), "data", "decks");
 
+const isText = (v: unknown): v is string => typeof v === "string" && v.trim() !== "";
+const AUDIO_RE = /^(?:[A-Za-z0-9_-]{20,}|audio\/[A-Za-z0-9._-]+\.(?:mp3|ogg|oga|opus|m4a|wav))$/;
+
+function validOptions(item: { options?: unknown; answer?: unknown }): boolean {
+  const { options, answer } = item;
+  return (
+    Array.isArray(options) &&
+    options.length >= 2 &&
+    options.length <= 6 &&
+    options.every(isText) &&
+    new Set(options).size === options.length &&
+    Number.isInteger(answer) &&
+    (answer as number) >= 0 &&
+    (answer as number) < options.length
+  );
+}
+
+function keep<T>(file: string, section: string, items: unknown, ok: (x: any) => boolean): T[] {
+  if (items === undefined) return [];
+  if (!Array.isArray(items)) {
+    console.error(`Колода ${file}: "${section}" должен быть списком, раздел пропущен`);
+    return [];
+  }
+  return items.filter((item, i) => {
+    const good = item !== null && typeof item === "object" && ok(item);
+    if (!good) console.error(`Колода ${file}: пропущено задание ${section} №${i + 1} (неверный формат)`);
+    return good;
+  });
+}
+
+function parseDeck(id: string, file: string, raw: unknown): Deck | undefined {
+  const d = raw as Record<string, unknown>;
+  if (d === null || typeof d !== "object" || !isText(d.name)) {
+    console.error(`Колода ${file}: нет поля "name", файл пропущен`);
+    return undefined;
+  }
+  const cards = keep<Card>(file, "cards", d.cards, (c) => isText(c.hanzi) && isText(c.pinyin) && isText(c.translation));
+  const tests = keep<TestItem>(
+    file,
+    "tests",
+    d.tests,
+    (t) => isText(t.question) && validOptions(t) && (t.audio === undefined || (typeof t.audio === "string" && AUDIO_RE.test(t.audio))),
+  );
+  const pairs = keep<PairItem>(file, "pairs", d.pairs, (p) => isText(p.left) && isText(p.right));
+  const cloze = keep<ClozeItem>(file, "cloze", d.cloze, (c) => isText(c.text) && c.text.includes("___") && validOptions(c));
+  if (cards.length + tests.length + pairs.length + cloze.length === 0) {
+    console.error(`Колода ${file}: нет ни одного корректного задания, файл пропущен`);
+    return undefined;
+  }
+  return { id, name: d.name, cards, tests, pairs, cloze };
+}
+
 function loadDecks(): Map<string, Deck> {
   const decks = new Map<string, Deck>();
   let files: string[];
@@ -69,10 +159,15 @@ function loadDecks(): Map<string, Deck> {
     return decks;
   }
   for (const file of files) {
-    const raw = readFileSync(join(decksDir, file), "utf-8");
-    const parsed = JSON.parse(raw) as { name: string; cards: Card[] };
+    let raw: unknown;
+    try {
+      raw = JSON.parse(readFileSync(join(decksDir, file), "utf-8"));
+    } catch (e) {
+      throw new Error(`Колода ${file} не читается как JSON: ${e instanceof Error ? e.message : String(e)}`);
+    }
     const id = file.replace(/\.json$/, "");
-    decks.set(id, { id, name: parsed.name, cards: parsed.cards });
+    const deck = parseDeck(id, file, raw);
+    if (deck) decks.set(id, deck);
   }
   return decks;
 }
@@ -109,7 +204,11 @@ export function clearProgress(userId: number): void {
   progress.delete(userId);
 }
 
-export function eligibleCards(deck: Deck, mode: Mode): number[] {
+// Индексы заданий, доступных в режиме (в массиве, который режим использует).
+export function eligibleItems(deck: Deck, mode: Mode): number[] {
+  if (mode === "tests") return deck.tests.map((_, i) => i);
+  if (mode === "pairs") return deck.pairs.map((_, i) => i);
+  if (mode === "cloze") return deck.cloze.map((_, i) => i);
   return deck.cards.flatMap((card, i) => {
     if (mode === "listen") return card.audio ? [i] : [];
     if (mode === "tones") return hasTones(card.pinyin) ? [i] : [];
@@ -118,8 +217,8 @@ export function eligibleCards(deck: Deck, mode: Mode): number[] {
 }
 
 export function canStart(deck: Deck, mode: Mode): boolean {
-  const n = eligibleCards(deck, mode).length;
-  if (mode === "cards" || mode === "tones") return n >= 1;
+  const n = eligibleItems(deck, mode).length;
+  if (mode === "cards" || mode === "tones" || mode === "tests" || mode === "cloze") return n >= 1;
   if (mode === "listen") return n >= 1 && deck.cards.length >= 2;
   return n >= 2;
 }
@@ -133,8 +232,8 @@ export function startSession(
   const deck = decks.get(deckId);
   if (!deck || !canStart(deck, mode)) return undefined;
 
-  const eligible = eligibleCards(deck, mode);
-  const known = getKnown(userId, deckId) ?? new Set<number>();
+  const eligible = eligibleItems(deck, mode);
+  const known = isTaskMode(mode) ? new Set<number>() : (getKnown(userId, deckId) ?? new Set<number>());
   // сначала невыученные, потом выученные — чтобы ограничение по длине
   // отрезало именно повторение уже известного
   let picked = [
@@ -156,7 +255,7 @@ export function startSession(
     answered: false,
     touched: Date.now(),
   };
-  if (mode === "match") {
+  if (mode === "match" || mode === "pairs") {
     session.match = {
       rounds: buildRounds(order),
       round: 0,
@@ -219,6 +318,21 @@ function pickDistinct(pool: string[], exclude: string, count: number): string[] 
 export function buildQuestion(session: Session): { prompt: string; voice?: string; labels: string[] } {
   const deck = decks.get(session.deckId)!;
   const cardIndex = session.order[session.position];
+
+  if (session.mode === "tests" || session.mode === "cloze") {
+    const isTest = session.mode === "tests";
+    const item = isTest ? deck.tests[cardIndex] : deck.cloze[cardIndex];
+    const options = shuffle<Option>(item.options.map((label, i) => ({ label, correct: i === item.answer })));
+    session.options = options;
+    session.answered = false;
+    return {
+      prompt: isTest ? (item as TestItem).question : `${(item as ClozeItem).text}
+Выберите пропущенное:`,
+      voice: isTest ? (item as TestItem).audio : undefined,
+      labels: options.map((o) => o.label),
+    };
+  }
+
   const card = deck.cards[cardIndex];
   const others = deck.cards.filter((_, i) => i !== cardIndex);
   const distractors = MAX_OPTIONS - 1;
@@ -260,31 +374,75 @@ export function buildQuestion(session: Session): { prompt: string; voice?: strin
   return { prompt, voice, labels: options.map((o) => o.label) };
 }
 
+function cardLine(card: Card): string {
+  return `${card.hanzi} ${card.pinyin} — ${card.translation}`;
+}
+
+function fillBlank(item: ClozeItem): string {
+  return item.text.replace("___", item.options[item.answer]);
+}
+
+// Разбор ответа на текущее задание: правильный ответ и пояснение.
+function feedbackText(session: Session): string {
+  const deck = decks.get(session.deckId)!;
+  const i = session.order[session.position];
+  if (session.mode === "tests") {
+    const t = deck.tests[i];
+    return `Правильный ответ: ${t.options[t.answer]}` + (t.explain ? `
+${t.explain}` : "");
+  }
+  if (session.mode === "cloze") {
+    const c = deck.cloze[i];
+    return fillBlank(c) + (c.translation ? `
+${c.translation}` : "");
+  }
+  return cardLine(deck.cards[i]);
+}
+
 export function checkAnswer(
   session: Session,
   optionIndex: number,
-): { correct: boolean; card: Card } | undefined {
+): { correct: boolean; feedback: string } | undefined {
   const option = session.options?.[optionIndex];
   if (!option || session.answered) return undefined;
   session.answered = true;
   record(session, option.correct);
-  return { correct: option.correct, card: currentCard(session) };
+  return { correct: option.correct, feedback: feedbackText(session) };
 }
 
+function missedLine(deck: Deck, mode: Mode, i: number): string {
+  if (mode === "tests") return deck.tests[i].question;
+  if (mode === "pairs") return `${deck.pairs[i].left} — ${deck.pairs[i].right}`;
+  if (mode === "cloze") return fillBlank(deck.cloze[i]);
+  return cardLine(deck.cards[i]);
+}
+
+// Итог занятия. known (выученные карточки) считается только для режимов по карточкам.
 export function finishSession(
   userId: number,
-): { session: Session; known: Set<number>; missedCards: Card[] } | undefined {
+): { session: Session; known?: Set<number>; missedLines: string[] } | undefined {
   const session = sessions.get(userId);
   if (!session) return undefined;
   sessions.delete(userId);
 
-  const known = new Set(getKnown(userId, session.deckId) ?? []);
-  for (const i of session.missed) known.delete(i);
-  for (const i of session.right) known.add(i);
-  setKnown(userId, session.deckId, known);
+  let known: Set<number> | undefined;
+  if (!isTaskMode(session.mode)) {
+    known = new Set(getKnown(userId, session.deckId) ?? []);
+    for (const i of session.missed) known.delete(i);
+    for (const i of session.right) known.add(i);
+    setKnown(userId, session.deckId, known);
+  }
 
   const deck = decks.get(session.deckId)!;
-  return { session, known, missedCards: [...session.missed].map((i) => deck.cards[i]) };
+  return { session, known, missedLines: [...session.missed].map((i) => missedLine(deck, session.mode, i)) };
+}
+
+// Подписи левой и правой плитки матч-игры для задания с индексом i.
+export function matchTexts(session: Session, i: number): { left: string; right: string } {
+  const deck = decks.get(session.deckId)!;
+  if (session.mode === "pairs") return deck.pairs[i];
+  const card = deck.cards[i];
+  return { left: card.hanzi, right: card.translation };
 }
 
 function buildRounds(order: number[]): number[][] {

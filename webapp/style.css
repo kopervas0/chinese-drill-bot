@@ -919,3 +919,22 @@ textarea.codebox:focus {
   .hanzi { font-size: 72px; }
   .flip-inner { min-height: 300px; }
 }
+
+/* ---------- пропуск и строки итога для своих заданий ---------- */
+
+.blank {
+  display: inline-block;
+  min-width: 2.4em;
+  height: 1em;
+  margin: 0 0.15em;
+  border-bottom: 3px solid var(--accent);
+  vertical-align: -0.1em;
+}
+
+.missed .m.plain {
+  grid-template-columns: 1fr;
+}
+
+.missed .m.plain .p {
+  font-weight: 600;
+}

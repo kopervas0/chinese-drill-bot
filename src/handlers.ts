@@ -1,21 +1,22 @@
-import { Bot, Context, InlineKeyboard } from "grammy";
+import { Bot, Context, InlineKeyboard, InputFile } from "grammy";
 import { increment, reset } from "./counter.js";
 import {
   advance,
   buildQuestion,
   canStart,
-  cardAt,
   checkAnswer,
   clearProgress,
   currentCard,
   decks,
-  eligibleCards,
+  eligibleItems,
   finishSession,
   getKnown,
   getSession,
   isFinished,
+  isTaskMode,
   matchPick,
   MatchState,
+  matchTexts,
   Mode,
   nextRound,
   record,
@@ -33,12 +34,32 @@ const MODE_LABELS: Record<Mode, string> = {
   tones: "Тоны: выбери пиньинь",
   match: "Матч-игра (найди пары)",
   listen: "На слух",
+  tests: "Тесты",
+  pairs: "Найди пары (задания)",
+  cloze: "Заполни пропуск",
 };
-const MODE_ORDER: Mode[] = ["cards", "quiz", "quizrev", "tones", "match", "listen"];
+const MODE_ORDER: Mode[] = ["cards", "quiz", "quizrev", "tones", "match", "listen", "tests", "pairs", "cloze"];
+const MODE_RE = "cards|quiz|quizrev|tones|listen|match|tests|pairs|cloze";
 const EXPIRED = "Сессия истекла. Наберите /train, чтобы начать заново.";
+
+// Адрес сайта мини-приложения: от него считаются пути к аудио заданий.
+let audioBase: string | undefined;
 
 function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// audio задания: file_id голосового или путь audio/name.mp3 на сайте приложения.
+async function sendAudio(ctx: Context, audio: string) {
+  if (/^[A-Za-z0-9_-]+$/.test(audio)) {
+    await ctx.replyWithVoice(audio);
+    return;
+  }
+  if (!audioBase) {
+    await ctx.reply("(К этому заданию есть аудио, но адрес мини-приложения не настроен.)");
+    return;
+  }
+  await ctx.replyWithAudio(new InputFile(new URL(audio, audioBase)));
 }
 
 async function sendModePicker(ctx: Context, deckId: string) {
@@ -62,23 +83,23 @@ async function sendLengthPicker(ctx: Context, deckId: string, mode: Mode) {
     await ctx.reply("Этот формат недоступен для колоды.");
     return;
   }
-  const total = eligibleCards(deck, mode).length;
+  const total = eligibleItems(deck, mode).length;
   const keyboard = new InlineKeyboard();
   for (const n of [10, 20]) {
     if (n < total) keyboard.text(String(n), `len:${n}:${mode}:${deckId}`);
   }
   keyboard.text(`Все (${total})`, `len:all:${mode}:${deckId}`);
 
-  const known = ctx.from ? getKnown(ctx.from.id, deckId) : undefined;
+  const known = ctx.from && !isTaskMode(mode) ? getKnown(ctx.from.id, deckId) : undefined;
   const note = known?.size
     ? `\nВыучено: ${known.size} из ${deck.cards.length}. Сначала пойдут новые слова.`
     : "";
-  await ctx.reply(`Сколько карточек?${note}`, { reply_markup: keyboard });
+  await ctx.reply(`Сколько ${isTaskMode(mode) ? "заданий" : "карточек"}?${note}`, { reply_markup: keyboard });
 }
 
 function matchLabel(session: Session, m: MatchState, side: "l" | "r", card: number): string {
-  const c = cardAt(session, card);
-  const text = side === "l" ? c.hanzi : c.translation;
+  const t = matchTexts(session, card);
+  const text = side === "l" ? t.left : t.right;
   if (m.done.has(card)) return `✅ ${text}`;
   if (m.picked?.side === side && m.picked.card === card) return `👉 ${text}`;
   return text;
@@ -98,9 +119,10 @@ function matchKeyboard(session: Session): InlineKeyboard {
 }
 
 async function renderQuestion(ctx: Context, session: Session) {
-  if (session.mode === "match") {
+  if (session.mode === "match" || session.mode === "pairs") {
     const m = session.match!;
-    await ctx.reply(`[Раунд ${m.round + 1}/${m.rounds.length}] Найдите пары: иероглиф ↔ перевод`, {
+    const what = session.mode === "match" ? "иероглиф ↔ перевод" : "соедините подходящие";
+    await ctx.reply(`[Раунд ${m.round + 1}/${m.rounds.length}] Найдите пары: ${what}`, {
       reply_markup: matchKeyboard(session),
     });
     return;
@@ -122,7 +144,7 @@ async function renderQuestion(ctx: Context, session: Session) {
   const keyboard = new InlineKeyboard();
   q.labels.forEach((label, i) => keyboard.text(label, `answer:${p}:${i}`).row());
   keyboard.text("Закончить", "stop");
-  if (q.voice) await ctx.replyWithVoice(q.voice);
+  if (q.voice) await sendAudio(ctx, q.voice);
   await ctx.reply(`${progress} ${q.prompt}`, { reply_markup: keyboard });
 }
 
@@ -132,7 +154,7 @@ async function finish(ctx: Context, userId: number) {
     await ctx.reply("Сейчас нет активной тренировки. Наберите /train.");
     return;
   }
-  const { session, known, missedCards } = res;
+  const { session, known, missedLines } = res;
   const deck = decks.get(session.deckId)!;
   const answered = session.right.size + session.missed.size;
   if (answered === 0) {
@@ -142,21 +164,21 @@ async function finish(ctx: Context, userId: number) {
 
   const lines = ["Тренировка окончена.", `С первого раза: ${session.right.size} из ${answered}.`];
   if (session.match) lines.push(`Ошибок в матч-игре: ${session.match.mistakes}.`);
-  if (missedCards.length > 0) {
+  if (missedLines.length > 0) {
     lines.push("", "Стоит повторить:");
-    for (const c of missedCards.slice(0, 10)) {
-      lines.push(`${esc(c.hanzi)} ${esc(c.pinyin)} — ${esc(c.translation)}`);
-    }
-    if (missedCards.length > 10) lines.push(`…и ещё ${missedCards.length - 10}`);
+    for (const line of missedLines.slice(0, 10)) lines.push(esc(line));
+    if (missedLines.length > 10) lines.push(`…и ещё ${missedLines.length - 10}`);
   }
-  lines.push(
-    "",
-    `Выучено в колоде: ${known.size} из ${deck.cards.length}.`,
-    "Код прогресса (нажмите, чтобы скопировать):",
-    `<code>${esc(encodeProgress(deck, known))}</code>`,
-    "Чтобы продолжить с этого места в другой раз, отправьте боту /code и этот код.",
-    "Сам бот ничего не сохраняет: код хранится только у вас.",
-  );
+  if (known) {
+    lines.push(
+      "",
+      `Выучено в колоде: ${known.size} из ${deck.cards.length}.`,
+      "Код прогресса (нажмите, чтобы скопировать):",
+      `<code>${esc(encodeProgress(deck, known))}</code>`,
+      "Чтобы продолжить с этого места в другой раз, отправьте боту /code и этот код.",
+      "Сам бот ничего не сохраняет: код хранится только у вас.",
+    );
+  }
   await ctx.reply(lines.join("\n"), { parse_mode: "HTML" });
 }
 
@@ -175,6 +197,7 @@ export function createBot(
   allowedChats?: Set<number>,
 ): Bot {
   const bot = new Bot(token);
+  audioBase = webAppUrl;
 
   bot.catch((err) => {
     // Логируем только текст ошибки: контекст апдейта содержит id пользователя.
@@ -184,7 +207,7 @@ export function createBot(
   bot.command("start", (ctx) =>
     ctx.reply(
       "Привет! Я помогаю запоминать китайские слова. 🇨🇳\n\n" +
-        "/train — начать тренировку (карточки, квизы, тоны, матч-игра, на слух)\n" +
+        "/train — начать тренировку (карточки, квизы, тоны, пары, тесты, на слух)\n" +
         "/code — продолжить с сохранённым кодом прогресса\n" +
         (webAppUrl ? "/app — открыть тренажёр в приложении\n" : "") +
         "/stop — закончить занятие\n\n" +
@@ -252,12 +275,12 @@ export function createBot(
     await sendModePicker(ctx, ctx.match[1]);
   });
 
-  bot.callbackQuery(/^mode:(cards|quiz|quizrev|tones|listen|match):(.+)$/, async (ctx) => {
+  bot.callbackQuery(new RegExp(`^mode:(${MODE_RE}):(.+)$`), async (ctx) => {
     await ctx.answerCallbackQuery();
     await sendLengthPicker(ctx, ctx.match[2], ctx.match[1] as Mode);
   });
 
-  bot.callbackQuery(/^len:(\d+|all):(cards|quiz|quizrev|tones|listen|match):(.+)$/, async (ctx) => {
+  bot.callbackQuery(new RegExp(`^len:(\\d+|all):(${MODE_RE}):(.+)$`), async (ctx) => {
     await ctx.answerCallbackQuery();
     const limit = ctx.match[1] === "all" ? null : Number(ctx.match[1]);
     const session = startSession(ctx.from.id, ctx.match[3], ctx.match[2] as Mode, limit);
@@ -310,13 +333,12 @@ export function createBot(
     const result = checkAnswer(session, Number(ctx.match[2]));
     if (!result) return;
 
-    const { card } = result;
     const head = result.correct ? "✅ Верно!" : "❌ Неверно.";
     const keyboard = new InlineKeyboard()
       .text("Дальше", `next:${session.position}`)
       .row()
       .text("Закончить", "stop");
-    await ctx.reply(`${head}\n${card.hanzi} ${card.pinyin} — ${card.translation}`, {
+    await ctx.reply(`${head}\n${result.feedback}`, {
       reply_markup: keyboard,
     });
   });
