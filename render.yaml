@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: chinese-drill-bot
+    runtime: node
+    plan: free
+    healthCheckPath: /healthz
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: node dist/bot.js
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: BOT_TOKEN
+        sync: false
+      - key: TOPIC_WORK_THRESHOLD
+        value: "20"
+      - key: WEBHOOK_SECRET
+        generateValue: true

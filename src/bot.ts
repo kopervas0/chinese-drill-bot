@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { createBot } from "./handlers.js";
+import { createWebhookServer, deriveSecretToken, WEBHOOK_PATH } from "./webhook.js";
 
 const token = process.env.BOT_TOKEN;
 if (!token) throw new Error("BOT_TOKEN не задан в .env");
@@ -39,5 +40,34 @@ if (webAppUrl) {
     );
 }
 
-bot.start();
-console.log("Бот запущен в режиме polling");
+// Режим вебхука нужен для хостингов, которые «засыпают» без входящих запросов:
+// Telegram сам стучится на адрес бота и будит его. Включается, если задан
+// WEBHOOK_URL (или RENDER_EXTERNAL_URL, его выставляет Render). Иначе — polling.
+const webhookBase = (process.env.WEBHOOK_URL?.trim() || process.env.RENDER_EXTERNAL_URL?.trim() || "").replace(
+  /\/+$/,
+  "",
+);
+
+if (webhookBase) {
+  if (!webhookBase.startsWith("https://")) throw new Error("WEBHOOK_URL должен начинаться с https://");
+  const secret = process.env.WEBHOOK_SECRET?.trim();
+  if (!secret || secret.length < 16) throw new Error("WEBHOOK_SECRET не задан или короче 16 символов");
+  const secretToken = deriveSecretToken(secret);
+
+  const server = createWebhookServer(bot, secretToken);
+  const port = Number(process.env.PORT ?? 8080);
+  await bot.init();
+  await new Promise<void>((resolve) => server.listen(port, "0.0.0.0", resolve));
+  await bot.api.setWebhook(`${webhookBase}${WEBHOOK_PATH}`, {
+    secret_token: secretToken,
+    allowed_updates: ["message", "callback_query"],
+  });
+  process.on("SIGTERM", () => {
+    server.close();
+    process.exit(0);
+  });
+  console.log("Бот запущен в режиме вебхука");
+} else {
+  bot.start();
+  console.log("Бот запущен в режиме polling");
+}
