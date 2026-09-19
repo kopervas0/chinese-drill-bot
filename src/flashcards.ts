@@ -20,7 +20,18 @@ export interface Deck {
   cards: Card[];
 }
 
-export type Mode = "cards" | "quiz" | "listen";
+export type Mode = "cards" | "quiz" | "listen" | "match";
+
+export interface MatchState {
+  rounds: number[][];
+  round: number;
+  // индексы карточек в порядке отображения левой (иероглифы) и правой (переводы) колонок
+  left: number[];
+  right: number[];
+  done: Set<number>;
+  picked?: { side: "l" | "r"; card: number };
+  mistakes: number;
+}
 
 export interface Session {
   deckId: string;
@@ -31,6 +42,7 @@ export interface Session {
   // индексы карточек, показанные как варианты ответа для текущего
   // вопроса (quiz/listen), в порядке отображения
   options?: number[];
+  match?: MatchState;
 }
 
 const decksDir = join(process.cwd(), "data", "decks");
@@ -65,6 +77,7 @@ function shuffle<T>(items: T[]): T[] {
 
 const sessions = new Map<number, Session>();
 const MAX_OPTIONS = 4;
+const MATCH_PAIRS = 5;
 
 export function startSession(userId: number, deckId: string, mode: Mode): Session | undefined {
   const deck = decks.get(deckId);
@@ -76,8 +89,75 @@ export function startSession(userId: number, deckId: string, mode: Mode): Sessio
     position: 0,
     score: 0,
   };
+  if (mode === "match") {
+    session.match = {
+      rounds: buildRounds(session.order),
+      round: 0,
+      left: [],
+      right: [],
+      done: new Set(),
+      mistakes: 0,
+    };
+    setupRound(session.match);
+  }
   sessions.set(userId, session);
   return session;
+}
+
+function buildRounds(order: number[]): number[][] {
+  const rounds: number[][] = [];
+  for (let i = 0; i < order.length; i += MATCH_PAIRS) {
+    rounds.push(order.slice(i, i + MATCH_PAIRS));
+  }
+  const last = rounds[rounds.length - 1];
+  if (rounds.length > 1 && last.length === 1) {
+    rounds.pop();
+    rounds[rounds.length - 1].push(last[0]);
+  }
+  return rounds;
+}
+
+function setupRound(m: MatchState): void {
+  const cards = m.rounds[m.round];
+  m.left = shuffle(cards);
+  m.right = shuffle(cards);
+  m.done = new Set();
+  m.picked = undefined;
+}
+
+export type PickResult = "ignored" | "selected" | "matched" | "wrong";
+
+export function matchPick(session: Session, side: "l" | "r", pos: number): PickResult {
+  const m = session.match;
+  if (!m) return "ignored";
+  const card = (side === "l" ? m.left : m.right)[pos];
+  if (card === undefined || m.done.has(card)) return "ignored";
+  const p = m.picked;
+  if (!p || p.side === side) {
+    if (p && p.card === card) return "ignored";
+    m.picked = { side, card };
+    return "selected";
+  }
+  m.picked = undefined;
+  if (p.card === card) {
+    m.done.add(card);
+    return "matched";
+  }
+  m.mistakes += 1;
+  return "wrong";
+}
+
+export function roundComplete(session: Session): boolean {
+  const m = session.match;
+  return !!m && m.done.size === m.left.length;
+}
+
+export function nextRound(session: Session): boolean {
+  const m = session.match!;
+  m.round += 1;
+  if (m.round >= m.rounds.length) return false;
+  setupRound(m);
+  return true;
 }
 
 export function getSession(userId: number): Session | undefined {
@@ -123,6 +203,10 @@ export function buildOptions(session: Session): number[] {
 }
 
 export function canQuiz(deck: Deck): boolean {
+  return deck.cards.length >= 2;
+}
+
+export function canMatch(deck: Deck): boolean {
   return deck.cards.length >= 2;
 }
 

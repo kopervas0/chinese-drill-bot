@@ -5,13 +5,18 @@ import {
   advance,
   buildOptions,
   canListen,
+  canMatch,
   canQuiz,
   cardAt,
   currentCard,
   decks,
   endSession,
   getSession,
+  matchPick,
+  MatchState,
   Mode,
+  nextRound,
+  roundComplete,
   Session,
   startSession,
   totalCards,
@@ -30,7 +35,7 @@ const bot = new Bot(token);
 bot.command("start", (ctx) =>
   ctx.reply(
     "Привет! Я помогаю запоминать китайские слова. 🇨🇳\n\n" +
-      "/train — начать тренировку (карточки, квиз или на слух)\n" +
+      "/train — начать тренировку (карточки, квиз, матч-игра или на слух)\n" +
       "/stop — остановить занятие\n\n" +
       "Удачи в учёбе!"
   )
@@ -45,6 +50,9 @@ async function sendModePicker(ctx: Context, deckId: string) {
   const keyboard = new InlineKeyboard().text("Карточки", `mode:cards:${deckId}`).row();
   if (canQuiz(deck)) {
     keyboard.text("Квиз (варианты)", `mode:quiz:${deckId}`).row();
+  }
+  if (canMatch(deck)) {
+    keyboard.text("Матч-игра (найди пары)", `mode:match:${deckId}`).row();
   }
   if (canListen(deck)) {
     keyboard.text("На слух", `mode:listen:${deckId}`).row();
@@ -63,7 +71,37 @@ async function beginTraining(ctx: Context, userId: number, deckId: string, mode:
   await renderQuestion(ctx, session);
 }
 
+function matchLabel(session: Session, m: MatchState, side: "l" | "r", card: number): string {
+  const c = cardAt(session, card);
+  const text = side === "l" ? c.hanzi : c.translation;
+  if (m.done.has(card)) return `✅ ${text}`;
+  if (m.picked?.side === side && m.picked.card === card) return `👉 ${text}`;
+  return text;
+}
+
+function matchKeyboard(session: Session): InlineKeyboard {
+  const m = session.match!;
+  const keyboard = new InlineKeyboard();
+  m.left.forEach((leftCard, i) => {
+    keyboard
+      .text(matchLabel(session, m, "l", leftCard), `ml:${i}`)
+      .text(matchLabel(session, m, "r", m.right[i]), `mr:${i}`)
+      .row();
+  });
+  keyboard.text("Закончить", "stop");
+  return keyboard;
+}
+
 async function renderQuestion(ctx: Context, session: Session) {
+  if (session.mode === "match") {
+    const m = session.match!;
+    await ctx.reply(
+      `[Раунд ${m.round + 1}/${m.rounds.length}] Найдите пары: иероглиф ↔ перевод`,
+      { reply_markup: matchKeyboard(session) },
+    );
+    return;
+  }
+
   const card = currentCard(session);
   const progress = `[${session.position + 1}/${totalCards(session)}]`;
 
@@ -124,7 +162,39 @@ bot.callbackQuery(/^deck:(.+)$/, async (ctx) => {
   await sendModePicker(ctx, ctx.match[1]);
 });
 
-bot.callbackQuery(/^mode:(cards|quiz|listen):(.+)$/, async (ctx) => {
+bot.callbackQuery(/^m([lr]):(\d+)$/, async (ctx) => {
+  const session = getSession(ctx.from.id);
+  if (!session?.match) {
+    await ctx.answerCallbackQuery();
+    await ctx.reply("Сессия истекла. Наберите /train, чтобы начать заново.");
+    return;
+  }
+  const m = session.match;
+  const result = matchPick(session, ctx.match[1] as "l" | "r", Number(ctx.match[2]));
+  if (result === "ignored") {
+    await ctx.answerCallbackQuery();
+    return;
+  }
+  await ctx.answerCallbackQuery(result === "wrong" ? { text: "Не пара, попробуйте ещё" } : undefined);
+
+  if (roundComplete(session)) {
+    await ctx.editMessageText(`Раунд ${m.round + 1}/${m.rounds.length} пройден ✅`);
+    if (nextRound(session)) {
+      await renderQuestion(ctx, session);
+      return;
+    }
+    const total = totalCards(session);
+    const mistakes = m.mistakes;
+    endSession(ctx.from.id);
+    await ctx.reply(
+      `Готово! Пар: ${total}, ошибок: ${mistakes}. Наберите /train, чтобы повторить.`,
+    );
+    return;
+  }
+  await ctx.editMessageReplyMarkup({ reply_markup: matchKeyboard(session) });
+});
+
+bot.callbackQuery(/^mode:(cards|quiz|listen|match):(.+)$/, async (ctx) => {
   const mode = ctx.match[1] as Mode;
   const deckId = ctx.match[2];
   await ctx.answerCallbackQuery();
