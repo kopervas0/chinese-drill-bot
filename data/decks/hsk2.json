@@ -1,0 +1,740 @@
+{
+  "name": "HSK 2 — 147 слов",
+  "cards": [
+    {
+      "hanzi": "就",
+      "pinyin": "jiù",
+      "translation": "уже; сразу; именно"
+    },
+    {
+      "hanzi": "要",
+      "pinyin": "yào",
+      "translation": "хотеть; нужно; собираться"
+    },
+    {
+      "hanzi": "也",
+      "pinyin": "yě",
+      "translation": "тоже"
+    },
+    {
+      "hanzi": "到",
+      "pinyin": "dào",
+      "translation": "приезжать; до"
+    },
+    {
+      "hanzi": "还",
+      "pinyin": "hái",
+      "translation": "ещё; всё ещё"
+    },
+    {
+      "hanzi": "着",
+      "pinyin": "zhe",
+      "translation": "частица длительного состояния"
+    },
+    {
+      "hanzi": "给",
+      "pinyin": "gěi",
+      "translation": "давать; для"
+    },
+    {
+      "hanzi": "让",
+      "pinyin": "ràng",
+      "translation": "позволять; заставлять"
+    },
+    {
+      "hanzi": "吧",
+      "pinyin": "ba",
+      "translation": "частица предложения или предположения"
+    },
+    {
+      "hanzi": "得",
+      "pinyin": "de",
+      "translation": "структурная частица после глагола"
+    },
+    {
+      "hanzi": "可以",
+      "pinyin": "kěyǐ",
+      "translation": "можно; мочь"
+    },
+    {
+      "hanzi": "为",
+      "pinyin": "wèi",
+      "translation": "для; ради"
+    },
+    {
+      "hanzi": "从",
+      "pinyin": "cóng",
+      "translation": "от; из; с"
+    },
+    {
+      "hanzi": "真",
+      "pinyin": "zhēn",
+      "translation": "правда; действительно"
+    },
+    {
+      "hanzi": "两",
+      "pinyin": "liǎng",
+      "translation": "два (перед счётным словом)"
+    },
+    {
+      "hanzi": "出",
+      "pinyin": "chū",
+      "translation": "выходить"
+    },
+    {
+      "hanzi": "已经",
+      "pinyin": "yǐjīng",
+      "translation": "уже"
+    },
+    {
+      "hanzi": "最",
+      "pinyin": "zuì",
+      "translation": "самый"
+    },
+    {
+      "hanzi": "因为",
+      "pinyin": "yīnwèi",
+      "translation": "потому что"
+    },
+    {
+      "hanzi": "再",
+      "pinyin": "zài",
+      "translation": "снова; ещё раз"
+    },
+    {
+      "hanzi": "次",
+      "pinyin": "cì",
+      "translation": "раз (счётное слово)"
+    },
+    {
+      "hanzi": "知道",
+      "pinyin": "zhīdào",
+      "translation": "знать"
+    },
+    {
+      "hanzi": "问题",
+      "pinyin": "wèntí",
+      "translation": "вопрос; проблема"
+    },
+    {
+      "hanzi": "走",
+      "pinyin": "zǒu",
+      "translation": "идти; уходить"
+    },
+    {
+      "hanzi": "它",
+      "pinyin": "tā",
+      "translation": "оно (о предметах)"
+    },
+    {
+      "hanzi": "但是",
+      "pinyin": "dànshì",
+      "translation": "но"
+    },
+    {
+      "hanzi": "可能",
+      "pinyin": "kěnéng",
+      "translation": "возможно; может быть"
+    },
+    {
+      "hanzi": "时间",
+      "pinyin": "shíjiān",
+      "translation": "время"
+    },
+    {
+      "hanzi": "开始",
+      "pinyin": "kāishǐ",
+      "translation": "начинать; начинаться"
+    },
+    {
+      "hanzi": "新",
+      "pinyin": "xīn",
+      "translation": "новый"
+    },
+    {
+      "hanzi": "找",
+      "pinyin": "zhǎo",
+      "translation": "искать"
+    },
+    {
+      "hanzi": "快",
+      "pinyin": "kuài",
+      "translation": "быстрый; скоро"
+    },
+    {
+      "hanzi": "比",
+      "pinyin": "bǐ",
+      "translation": "чем; сравнивать"
+    },
+    {
+      "hanzi": "所以",
+      "pinyin": "suǒyǐ",
+      "translation": "поэтому"
+    },
+    {
+      "hanzi": "觉得",
+      "pinyin": "juéde",
+      "translation": "считать; чувствовать"
+    },
+    {
+      "hanzi": "向",
+      "pinyin": "xiàng",
+      "translation": "к; в сторону"
+    },
+    {
+      "hanzi": "一起",
+      "pinyin": "yìqǐ",
+      "translation": "вместе"
+    },
+    {
+      "hanzi": "希望",
+      "pinyin": "xīwàng",
+      "translation": "надеяться; надежда"
+    },
+    {
+      "hanzi": "大家",
+      "pinyin": "dàjiā",
+      "translation": "все; всем"
+    },
+    {
+      "hanzi": "非常",
+      "pinyin": "fēicháng",
+      "translation": "очень; крайне"
+    },
+    {
+      "hanzi": "孩子",
+      "pinyin": "háizi",
+      "translation": "ребёнок"
+    },
+    {
+      "hanzi": "别",
+      "pinyin": "bié",
+      "translation": "не (запрет); другой"
+    },
+    {
+      "hanzi": "公司",
+      "pinyin": "gōngsī",
+      "translation": "компания"
+    },
+    {
+      "hanzi": "第一",
+      "pinyin": "dìyī",
+      "translation": "первый"
+    },
+    {
+      "hanzi": "问",
+      "pinyin": "wèn",
+      "translation": "спрашивать"
+    },
+    {
+      "hanzi": "长",
+      "pinyin": "cháng",
+      "translation": "длинный"
+    },
+    {
+      "hanzi": "告诉",
+      "pinyin": "gàosu",
+      "translation": "сообщать; говорить"
+    },
+    {
+      "hanzi": "事情",
+      "pinyin": "shìqing",
+      "translation": "дело; событие"
+    },
+    {
+      "hanzi": "号",
+      "pinyin": "hào",
+      "translation": "номер; число (дата)"
+    },
+    {
+      "hanzi": "高",
+      "pinyin": "gāo",
+      "translation": "высокий"
+    },
+    {
+      "hanzi": "件",
+      "pinyin": "jiàn",
+      "translation": "счётное слово для вещей и дел"
+    },
+    {
+      "hanzi": "张",
+      "pinyin": "zhāng",
+      "translation": "счётное слово для листов и столов"
+    },
+    {
+      "hanzi": "准备",
+      "pinyin": "zhǔnbèi",
+      "translation": "готовиться; готовить"
+    },
+    {
+      "hanzi": "进",
+      "pinyin": "jìn",
+      "translation": "входить"
+    },
+    {
+      "hanzi": "每",
+      "pinyin": "měi",
+      "translation": "каждый"
+    },
+    {
+      "hanzi": "您",
+      "pinyin": "nín",
+      "translation": "вы (вежливо)"
+    },
+    {
+      "hanzi": "送",
+      "pinyin": "sòng",
+      "translation": "дарить; провожать; отправлять"
+    },
+    {
+      "hanzi": "笑",
+      "pinyin": "xiào",
+      "translation": "смеяться; улыбаться"
+    },
+    {
+      "hanzi": "女人",
+      "pinyin": "nǚrén",
+      "translation": "женщина"
+    },
+    {
+      "hanzi": "小时",
+      "pinyin": "xiǎoshí",
+      "translation": "час"
+    },
+    {
+      "hanzi": "完",
+      "pinyin": "wán",
+      "translation": "закончить"
+    },
+    {
+      "hanzi": "路",
+      "pinyin": "lù",
+      "translation": "дорога"
+    },
+    {
+      "hanzi": "男人",
+      "pinyin": "nánrén",
+      "translation": "мужчина"
+    },
+    {
+      "hanzi": "玩",
+      "pinyin": "wán",
+      "translation": "играть; развлекаться"
+    },
+    {
+      "hanzi": "正在",
+      "pinyin": "zhèngzài",
+      "translation": "в процессе (действие идёт)"
+    },
+    {
+      "hanzi": "门",
+      "pinyin": "mén",
+      "translation": "дверь"
+    },
+    {
+      "hanzi": "穿",
+      "pinyin": "chuān",
+      "translation": "носить (одежду)"
+    },
+    {
+      "hanzi": "外",
+      "pinyin": "wài",
+      "translation": "снаружи"
+    },
+    {
+      "hanzi": "帮助",
+      "pinyin": "bāngzhù",
+      "translation": "помогать; помощь"
+    },
+    {
+      "hanzi": "晚上",
+      "pinyin": "wǎnshang",
+      "translation": "вечер"
+    },
+    {
+      "hanzi": "错",
+      "pinyin": "cuò",
+      "translation": "ошибка; неправильный"
+    },
+    {
+      "hanzi": "卖",
+      "pinyin": "mài",
+      "translation": "продавать"
+    },
+    {
+      "hanzi": "远",
+      "pinyin": "yuǎn",
+      "translation": "далеко"
+    },
+    {
+      "hanzi": "快乐",
+      "pinyin": "kuàilè",
+      "translation": "радостный; счастливый"
+    },
+    {
+      "hanzi": "懂",
+      "pinyin": "dǒng",
+      "translation": "понимать"
+    },
+    {
+      "hanzi": "药",
+      "pinyin": "yào",
+      "translation": "лекарство"
+    },
+    {
+      "hanzi": "黑",
+      "pinyin": "hēi",
+      "translation": "чёрный"
+    },
+    {
+      "hanzi": "身体",
+      "pinyin": "shēntǐ",
+      "translation": "тело; здоровье"
+    },
+    {
+      "hanzi": "元",
+      "pinyin": "yuán",
+      "translation": "юань"
+    },
+    {
+      "hanzi": "介绍",
+      "pinyin": "jièshào",
+      "translation": "представлять; знакомить"
+    },
+    {
+      "hanzi": "红",
+      "pinyin": "hóng",
+      "translation": "красный"
+    },
+    {
+      "hanzi": "欢迎",
+      "pinyin": "huānyíng",
+      "translation": "приветствовать; добро пожаловать"
+    },
+    {
+      "hanzi": "眼睛",
+      "pinyin": "yǎnjing",
+      "translation": "глаза"
+    },
+    {
+      "hanzi": "近",
+      "pinyin": "jìn",
+      "translation": "близкий"
+    },
+    {
+      "hanzi": "手机",
+      "pinyin": "shǒujī",
+      "translation": "мобильный телефон"
+    },
+    {
+      "hanzi": "忙",
+      "pinyin": "máng",
+      "translation": "занятой"
+    },
+    {
+      "hanzi": "离",
+      "pinyin": "lí",
+      "translation": "от (о расстоянии); отделяться"
+    },
+    {
+      "hanzi": "白",
+      "pinyin": "bái",
+      "translation": "белый"
+    },
+    {
+      "hanzi": "去年",
+      "pinyin": "qùnián",
+      "translation": "прошлый год"
+    },
+    {
+      "hanzi": "票",
+      "pinyin": "piào",
+      "translation": "билет"
+    },
+    {
+      "hanzi": "意思",
+      "pinyin": "yìsi",
+      "translation": "значение; смысл"
+    },
+    {
+      "hanzi": "早上",
+      "pinyin": "zǎoshang",
+      "translation": "утро"
+    },
+    {
+      "hanzi": "回答",
+      "pinyin": "huídá",
+      "translation": "отвечать"
+    },
+    {
+      "hanzi": "运动",
+      "pinyin": "yùndòng",
+      "translation": "спорт; заниматься спортом"
+    },
+    {
+      "hanzi": "妻子",
+      "pinyin": "qīzi",
+      "translation": "жена"
+    },
+    {
+      "hanzi": "鱼",
+      "pinyin": "yú",
+      "translation": "рыба"
+    },
+    {
+      "hanzi": "累",
+      "pinyin": "lèi",
+      "translation": "уставший"
+    },
+    {
+      "hanzi": "休息",
+      "pinyin": "xiūxi",
+      "translation": "отдыхать"
+    },
+    {
+      "hanzi": "洗",
+      "pinyin": "xǐ",
+      "translation": "мыть; стирать"
+    },
+    {
+      "hanzi": "船",
+      "pinyin": "chuán",
+      "translation": "лодка; корабль"
+    },
+    {
+      "hanzi": "房间",
+      "pinyin": "fángjiān",
+      "translation": "комната"
+    },
+    {
+      "hanzi": "丈夫",
+      "pinyin": "zhàngfu",
+      "translation": "муж"
+    },
+    {
+      "hanzi": "上班",
+      "pinyin": "shàngbān",
+      "translation": "идти на работу"
+    },
+    {
+      "hanzi": "生日",
+      "pinyin": "shēngrì",
+      "translation": "день рождения"
+    },
+    {
+      "hanzi": "姐姐",
+      "pinyin": "jiějie",
+      "translation": "старшая сестра"
+    },
+    {
+      "hanzi": "课",
+      "pinyin": "kè",
+      "translation": "урок"
+    },
+    {
+      "hanzi": "哥哥",
+      "pinyin": "gēge",
+      "translation": "старший брат"
+    },
+    {
+      "hanzi": "咖啡",
+      "pinyin": "kāfēi",
+      "translation": "кофе"
+    },
+    {
+      "hanzi": "考试",
+      "pinyin": "kǎoshì",
+      "translation": "экзамен"
+    },
+    {
+      "hanzi": "千",
+      "pinyin": "qiān",
+      "translation": "тысяча"
+    },
+    {
+      "hanzi": "慢",
+      "pinyin": "màn",
+      "translation": "медленный"
+    },
+    {
+      "hanzi": "旁边",
+      "pinyin": "pángbiān",
+      "translation": "рядом; сбоку"
+    },
+    {
+      "hanzi": "颜色",
+      "pinyin": "yánsè",
+      "translation": "цвет"
+    },
+    {
+      "hanzi": "雪",
+      "pinyin": "xuě",
+      "translation": "снег"
+    },
+    {
+      "hanzi": "妹妹",
+      "pinyin": "mèimei",
+      "translation": "младшая сестра"
+    },
+    {
+      "hanzi": "报纸",
+      "pinyin": "bàozhǐ",
+      "translation": "газета"
+    },
+    {
+      "hanzi": "贵",
+      "pinyin": "guì",
+      "translation": "дорогой"
+    },
+    {
+      "hanzi": "机场",
+      "pinyin": "jīchǎng",
+      "translation": "аэропорт"
+    },
+    {
+      "hanzi": "踢",
+      "pinyin": "tī",
+      "translation": "пинать; играть в футбол"
+    },
+    {
+      "hanzi": "弟弟",
+      "pinyin": "dìdi",
+      "translation": "младший брат"
+    },
+    {
+      "hanzi": "百",
+      "pinyin": "bǎi",
+      "translation": "сто"
+    },
+    {
+      "hanzi": "好吃",
+      "pinyin": "hǎochī",
+      "translation": "вкусный"
+    },
+    {
+      "hanzi": "旅游",
+      "pinyin": "lǚyóu",
+      "translation": "путешествовать"
+    },
+    {
+      "hanzi": "起床",
+      "pinyin": "qǐchuáng",
+      "translation": "вставать с постели"
+    },
+    {
+      "hanzi": "题",
+      "pinyin": "tí",
+      "translation": "задание; вопрос"
+    },
+    {
+      "hanzi": "便宜",
+      "pinyin": "piányi",
+      "translation": "дешёвый"
+    },
+    {
+      "hanzi": "唱歌",
+      "pinyin": "chàng gē",
+      "translation": "петь"
+    },
+    {
+      "hanzi": "右边",
+      "pinyin": "yòubian",
+      "translation": "справа"
+    },
+    {
+      "hanzi": "牛奶",
+      "pinyin": "niúnǎi",
+      "translation": "молоко"
+    },
+    {
+      "hanzi": "自行车",
+      "pinyin": "zìxíngchē",
+      "translation": "велосипед"
+    },
+    {
+      "hanzi": "鸡蛋",
+      "pinyin": "jīdàn",
+      "translation": "куриное яйцо"
+    },
+    {
+      "hanzi": "姓",
+      "pinyin": "xìng",
+      "translation": "фамилия"
+    },
+    {
+      "hanzi": "游泳",
+      "pinyin": "yóuyǒng",
+      "translation": "плавать"
+    },
+    {
+      "hanzi": "跳舞",
+      "pinyin": "tiàowǔ",
+      "translation": "танцевать"
+    },
+    {
+      "hanzi": "阴",
+      "pinyin": "yīn",
+      "translation": "пасмурный"
+    },
+    {
+      "hanzi": "生病",
+      "pinyin": "shēngbìng",
+      "translation": "заболеть"
+    },
+    {
+      "hanzi": "左边",
+      "pinyin": "zuǒbian",
+      "translation": "слева"
+    },
+    {
+      "hanzi": "公斤",
+      "pinyin": "gōngjīn",
+      "translation": "килограмм"
+    },
+    {
+      "hanzi": "教室",
+      "pinyin": "jiàoshì",
+      "translation": "класс; аудитория"
+    },
+    {
+      "hanzi": "服务员",
+      "pinyin": "fúwùyuán",
+      "translation": "официант"
+    },
+    {
+      "hanzi": "手表",
+      "pinyin": "shǒubiǎo",
+      "translation": "наручные часы"
+    },
+    {
+      "hanzi": "跑步",
+      "pinyin": "pǎobù",
+      "translation": "бегать"
+    },
+    {
+      "hanzi": "西瓜",
+      "pinyin": "xīguā",
+      "translation": "арбуз"
+    },
+    {
+      "hanzi": "晴",
+      "pinyin": "qíng",
+      "translation": "ясный"
+    },
+    {
+      "hanzi": "羊肉",
+      "pinyin": "yángròu",
+      "translation": "баранина"
+    },
+    {
+      "hanzi": "公共汽车",
+      "pinyin": "gōnggòng qìchē",
+      "translation": "автобус"
+    },
+    {
+      "hanzi": "打篮球",
+      "pinyin": "dǎ lánqiú",
+      "translation": "играть в баскетбол"
+    }
+  ]
+}
