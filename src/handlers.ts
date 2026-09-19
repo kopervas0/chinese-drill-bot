@@ -153,7 +153,7 @@ async function finish(ctx: Context, userId: number) {
     "",
     `Выучено в колоде: ${known.size} из ${deck.cards.length}.`,
     "Код прогресса (нажмите, чтобы скопировать):",
-    `<code>${encodeProgress(deck, known)}</code>`,
+    `<code>${esc(encodeProgress(deck, known))}</code>`,
     "Чтобы продолжить с этого места в другой раз, отправьте боту /code и этот код.",
     "Сам бот ничего не сохраняет: код хранится только у вас.",
   );
@@ -168,7 +168,12 @@ async function afterAdvance(ctx: Context, userId: number, session: Session) {
   await renderQuestion(ctx, session);
 }
 
-export function createBot(token: string, threshold: number): Bot {
+export function createBot(
+  token: string,
+  threshold: number,
+  webAppUrl?: string,
+  allowedChats?: Set<number>,
+): Bot {
   const bot = new Bot(token);
 
   bot.catch((err) => {
@@ -181,10 +186,19 @@ export function createBot(token: string, threshold: number): Bot {
       "Привет! Я помогаю запоминать китайские слова. 🇨🇳\n\n" +
         "/train — начать тренировку (карточки, квизы, тоны, матч-игра, на слух)\n" +
         "/code — продолжить с сохранённым кодом прогресса\n" +
+        (webAppUrl ? "/app — открыть тренажёр в приложении\n" : "") +
         "/stop — закончить занятие\n\n" +
         "Удачи в учёбе!",
     ),
   );
+
+  if (webAppUrl) {
+    bot.command("app", (ctx) =>
+      ctx.reply("Откройте тренажёр в приложении:", {
+        reply_markup: new InlineKeyboard().webApp("Открыть тренажёр", webAppUrl),
+      }),
+    );
+  }
 
   bot.command("train", async (ctx) => {
     if (decks.size === 0) {
@@ -357,14 +371,18 @@ export function createBot(token: string, threshold: number): Bot {
 
     // Считаем только сообщения внутри тем форума (не общий чат/General),
     // и не команды (например /start), и не сообщения самого бота.
+    // Темы бывают только в супергруппах; список чатов, если задан, ограничивает,
+    // где бот вообще что-то считает и закрывает.
+    if (ctx.chat.type !== "supergroup") return;
+    if (allowedChats && !allowedChats.has(ctx.chat.id)) return;
     if (!topicId || !msg.is_topic_message) return;
     if (msg.text?.startsWith("/")) return;
     if (msg.from?.is_bot) return;
 
-    const count = increment(topicId);
+    const count = increment(ctx.chat.id, topicId);
 
     if (count >= threshold) {
-      reset(topicId);
+      reset(ctx.chat.id, topicId);
       await ctx.api.closeForumTopic(ctx.chat.id, topicId);
       await ctx.reply(`Тема закрыта: набрано ${threshold} работ.`, {
         message_thread_id: topicId,

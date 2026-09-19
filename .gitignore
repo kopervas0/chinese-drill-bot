@@ -15,3 +15,5 @@ Thumbs.db
 data/counters.sqlite
 
 test-logic.mjs
+
+webapp/decks/

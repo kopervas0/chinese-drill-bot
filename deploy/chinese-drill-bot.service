@@ -1,0 +1,19 @@
+[Unit]
+Description=Chinese drill Telegram bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=drillbot
+WorkingDirectory=/opt/chinese-drill-bot
+ExecStart=/usr/bin/node dist/bot.js
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
