@@ -15,3 +15,21 @@ services:
         value: "20"
       - key: WEBHOOK_SECRET
         generateValue: true
+      - key: WEBAPP_URL
+        value: https://chinese-drill-app.onrender.com/
+
+  - type: web
+    name: chinese-drill-app
+    runtime: static
+    buildCommand: node scripts/build-webapp.mjs
+    staticPublishPath: webapp
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: no-referrer
