@@ -60,6 +60,15 @@ function pinyinHtml(pinyin) {
     .join("");
 }
 
+// Иероглиф, окрашенный по тону своего слога (если слоги и знаки совпадают по числу).
+function hanziHtml(hanzi, pinyin) {
+  const chars = [...hanzi];
+  let tones = pinyinTokens(pinyin).filter((t) => t.tone !== null).map((t) => t.tone);
+  if (chars.length > 1 && chars.at(-1) === "儿" && tones.length === chars.length - 1) tones.push(0);
+  if (tones.length !== chars.length) return esc(hanzi);
+  return chars.map((c, i) => (tones[i] ? `<span class="hc${tones[i]}">${esc(c)}</span>` : esc(c))).join("");
+}
+
 const haptic = {
   tap: () => tg?.HapticFeedback?.impactOccurred("light"),
   ok: () => tg?.HapticFeedback?.notificationOccurred("success"),
@@ -163,6 +172,19 @@ function deckMeta(deck) {
   return parts.join(" · ");
 }
 
+const PREFS_KEY = "drill.prefs.v1";
+const prefs = { pinyinColor: true, hanziColor: false };
+try {
+  Object.assign(prefs, JSON.parse(localStorage.getItem(PREFS_KEY) ?? "{}"));
+} catch {}
+
+function applyPrefs() {
+  const d = document.documentElement.dataset;
+  d.pycolor = prefs.pinyinColor ? "on" : "off";
+  d.hzcolor = prefs.hanziColor ? "on" : "off";
+}
+applyPrefs();
+
 function renderHome() {
   window.scrollTo(0, 0);
   state.screen = "home";
@@ -191,6 +213,10 @@ function renderHome() {
       <div><h1>Китайский тренажёр</h1><p>Выберите колоду и потренируйтесь</p></div>
     </header>
     <section class="decks">${cards}</section>
+    <section class="prefs">
+      <label><input type="checkbox" data-pref="pinyinColor" ${prefs.pinyinColor ? "checked" : ""} /> Цветные тоны в пиньине</label>
+      <label><input type="checkbox" data-pref="hanziColor" ${prefs.hanziColor ? "checked" : ""} /> Красить иероглифы по тону (подсказка)</label>
+    </section>
     <p class="note">Прогресс хранится только на этом устройстве.<br />Код прогресса подходит и для бота командой /code.<br />Порядок черт: <a href="https://github.com/chanind/hanzi-writer-data" target="_blank" rel="noopener noreferrer">Hanzi Writer Data</a> (Arphic Public License).</p>
   </div>`;
 }
@@ -355,11 +381,11 @@ function renderCard(stage) {
     <div class="card-wrap" id="cw">
       <div class="flip-inner">
         <div class="face front">
-          <div class="hanzi">${esc(card.hanzi)}</div>
+          <div class="hanzi">${hanziHtml(card.hanzi, card.pinyin)}</div>
           <div class="tap-hint">нажмите, чтобы перевернуть</div>
         </div>
         <div class="face back">
-          <div class="hanzi sm">${esc(card.hanzi)}</div>
+          <div class="hanzi sm">${hanziHtml(card.hanzi, card.pinyin)}</div>
           <div class="pinyin">${pinyinHtml(card.pinyin)}</div>
           <div class="translation">${esc(card.translation)}</div>
           ${speakBtn(card.hanzi)}
@@ -595,7 +621,7 @@ function renderChoice(stage) {
     const card = state.deck.cards[idx];
     han = s.mode === "quizrev";
     if (s.mode === "quiz") {
-      head = `<div class="center-col"><div class="hanzi md">${esc(card.hanzi)}</div>
+      head = `<div class="center-col"><div class="hanzi md">${hanziHtml(card.hanzi, card.pinyin)}</div>
         <div class="pinyin">${pinyinHtml(card.pinyin)}</div>${speakBtn(card.hanzi)}</div>
         <div class="prompt-note">Выберите перевод</div>`;
     } else if (s.mode === "quizrev") {
@@ -651,7 +677,7 @@ function pick(i) {
     if (s.mode === "quizrev" || s.mode === "tones") {
       reveal = `<div class="pinyin">${pinyinHtml(card.pinyin)}</div>`;
     } else if (s.mode === "listen") {
-      reveal = `<div class="row"><div class="hanzi sm">${esc(card.hanzi)}</div></div>
+      reveal = `<div class="row"><div class="hanzi sm">${hanziHtml(card.hanzi, card.pinyin)}</div></div>
         <div class="pinyin">${pinyinHtml(card.pinyin)}</div>
         <div class="translation">${esc(card.translation)}</div>`;
     }
@@ -758,7 +784,7 @@ function renderResult(s, deck, known, answered, code) {
   const missed = [...s.missed].map((i) => missedInfo(s, deck, i));
   const missedRow = (m) =>
     m.hanzi !== undefined
-      ? `<div class="m"><div class="h">${esc(m.hanzi)}</div>
+      ? `<div class="m"><div class="h">${hanziHtml(m.hanzi, m.pinyin)}</div>
           <div class="p">${pinyinHtml(m.pinyin)}</div><div class="t">${esc(m.translation)}</div></div>`
       : `<div class="m plain"><div class="p">${esc(m.title)}</div>${m.sub ? `<div class="t">${esc(m.sub)}</div>` : ""}</div>`;
   const missedHtml = missed.length
@@ -928,3 +954,13 @@ async function boot() {
 }
 
 boot();
+
+document.addEventListener("change", (e) => {
+  const key = e.target?.dataset?.pref;
+  if (!key || !(key in prefs)) return;
+  prefs[key] = e.target.checked;
+  applyPrefs();
+  try {
+    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+  } catch {}
+});
