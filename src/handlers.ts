@@ -1,5 +1,4 @@
 import { Bot, Context, InlineKeyboard, InputFile } from "grammy";
-import { increment, reset } from "./counter.js";
 import {
   advance,
   buildQuestion,
@@ -190,12 +189,7 @@ async function afterAdvance(ctx: Context, userId: number, session: Session) {
   await renderQuestion(ctx, session);
 }
 
-export function createBot(
-  token: string,
-  threshold: number,
-  webAppUrl?: string,
-  allowedChats?: Set<number>,
-): Bot {
+export function createBot(token: string, webAppUrl?: string): Bot {
   const bot = new Bot(token);
   audioBase = webAppUrl;
 
@@ -413,33 +407,11 @@ export function createBot(
 
   bot.on("message", async (ctx) => {
     const msg = ctx.message;
-    const topicId = msg.message_thread_id;
 
     // В личке любое не командное сообщение открывает приветствие с кнопками.
-    if (ctx.chat.type === "private") {
-      if (!msg.text?.startsWith("/") && !msg.from?.is_bot) await sendWelcome(ctx);
-      return;
-    }
-
-    // Считаем только сообщения внутри тем форума (не общий чат/General),
-    // и не команды (например /start), и не сообщения самого бота.
-    // Темы бывают только в супергруппах; список чатов, если задан, ограничивает,
-    // где бот вообще что-то считает и закрывает.
-    if (ctx.chat.type !== "supergroup") return;
-    if (allowedChats && !allowedChats.has(ctx.chat.id)) return;
-    if (!topicId || !msg.is_topic_message) return;
-    if (msg.text?.startsWith("/")) return;
-    if (msg.from?.is_bot) return;
-
-    const count = increment(ctx.chat.id, topicId);
-
-    if (count >= threshold) {
-      reset(ctx.chat.id, topicId);
-      await ctx.api.closeForumTopic(ctx.chat.id, topicId);
-      await ctx.reply(`Тема закрыта: набрано ${threshold} работ.`, {
-        message_thread_id: topicId,
-      });
-    }
+    // В группах бот на обычные сообщения не реагирует.
+    if (ctx.chat.type !== "private") return;
+    if (!msg.text?.startsWith("/") && !msg.from?.is_bot) await sendWelcome(ctx);
   });
 
   return bot;

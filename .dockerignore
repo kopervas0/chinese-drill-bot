@@ -1,0 +1,11 @@
+.git
+.claude
+.env
+.env.*
+node_modules
+dist
+webapp/decks
+webapp/strokes
+webapp/vendor
+*.log
+test-logic.mjs
