@@ -31,6 +31,28 @@ if (allowedRaw) {
 
 const bot = createBot(token, threshold, webAppUrl, allowedChats);
 
+// Меню команд (кнопка «Меню» рядом с полем ввода) и описание бота.
+const report = (what: string) => (err: unknown) =>
+  console.error(`${what}:`, err instanceof Error ? err.message : String(err));
+bot.api
+  .setMyCommands([
+    { command: "start", description: "Главное меню" },
+    { command: "train", description: "Начать тренировку" },
+    { command: "code", description: "Продолжить по коду прогресса" },
+    ...(webAppUrl ? [{ command: "app", description: "Открыть тренажёр в приложении" }] : []),
+    { command: "stop", description: "Закончить занятие" },
+  ])
+  .catch(report("Не удалось выставить команды"));
+bot.api
+  .setMyShortDescription("Тренажёр китайских слов: карточки, квизы, тоны, письмо. HSK 3.0.")
+  .catch(report("Не удалось выставить краткое описание"));
+bot.api
+  .setMyDescription(
+    "Помогаю запоминать китайские слова по программе HSK 3.0: карточки, квизы, тоны, пары, аудирование и письмо. " +
+      "Ничего не собираю: прогресс хранится у вас, а продолжить можно по коду.",
+  )
+  .catch(report("Не удалось выставить описание"));
+
 if (webAppUrl) {
   bot.api
     .setChatMenuButton({

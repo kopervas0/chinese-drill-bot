@@ -204,16 +204,23 @@ export function createBot(
     console.error("Ошибка обработчика:", err.error instanceof Error ? err.error.message : String(err.error));
   });
 
-  bot.command("start", (ctx) =>
-    ctx.reply(
-      "Привет! Я помогаю запоминать китайские слова. 🇨🇳\n\n" +
-        "/train — начать тренировку (карточки, квизы, тоны, пары, тесты, на слух)\n" +
-        "/code — продолжить с сохранённым кодом прогресса\n" +
-        (webAppUrl ? "/app — открыть тренажёр в приложении\n" : "") +
-        "/stop — закончить занятие\n\n" +
-        "Удачи в учёбе!",
-    ),
-  );
+  // Приветствие с кнопками. Главная кнопка красная (style: "danger"): так Telegram
+  // позволяет выделить кнопку цветом, свой оттенок задать нельзя.
+  const WELCOME =
+    "Привет! Я помогаю запоминать китайские слова. 🇨🇳\n\n" +
+    "Выберите действие кнопками ниже или командами из меню.";
+  const welcomeKeyboard = () => {
+    const rows: Record<string, unknown>[][] = [
+      [{ text: "📚 Начать тренировку", callback_data: "menu:train", style: "danger" }],
+      [{ text: "🔑 Код прогресса", callback_data: "menu:code" }],
+    ];
+    if (webAppUrl) rows.push([{ text: "📱 Открыть приложение", web_app: { url: webAppUrl } }]);
+    rows.push([{ text: "⏹ Закончить занятие", callback_data: "menu:stop" }]);
+    return { inline_keyboard: rows } as unknown as InlineKeyboard;
+  };
+  const sendWelcome = (ctx: Context) => ctx.reply(WELCOME, { reply_markup: welcomeKeyboard() });
+
+  bot.command("start", sendWelcome);
 
   if (webAppUrl) {
     bot.command("app", (ctx) =>
@@ -223,7 +230,7 @@ export function createBot(
     );
   }
 
-  bot.command("train", async (ctx) => {
+  const sendTrain = async (ctx: Context) => {
     if (decks.size === 0) {
       await ctx.reply("Колоды не найдены — добавьте JSON-файлы в data/decks/.");
       return;
@@ -237,7 +244,8 @@ export function createBot(
       keyboard.text(deck.name, `deck:${deck.id}`).row();
     }
     await ctx.reply("Выберите колоду:", { reply_markup: keyboard });
-  });
+  };
+  bot.command("train", sendTrain);
 
   bot.command("stop", async (ctx) => {
     if (ctx.from) await finish(ctx, ctx.from.id);
@@ -268,6 +276,22 @@ export function createBot(
       `Загружено: выучено ${res.known.size} из ${res.deck.cards.length} в колоде «${res.deck.name}». ` +
         "Наберите /train — сначала пойдут новые слова.",
     );
+  });
+
+  bot.callbackQuery("menu:train", async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await sendTrain(ctx);
+  });
+  bot.callbackQuery("menu:code", async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await ctx.reply(
+      "Отправьте /code и код прогресса, который бот выдал в конце занятия, например:\n/code hsk1.ab12.…\n" +
+        "Тогда выученные слова уйдут в конец очереди. /code сброс — забыть загруженный прогресс.",
+    );
+  });
+  bot.callbackQuery("menu:stop", async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await finish(ctx, ctx.from.id);
   });
 
   bot.callbackQuery(/^deck:(.+)$/, async (ctx) => {
@@ -390,6 +414,12 @@ export function createBot(
   bot.on("message", async (ctx) => {
     const msg = ctx.message;
     const topicId = msg.message_thread_id;
+
+    // В личке любое не командное сообщение открывает приветствие с кнопками.
+    if (ctx.chat.type === "private") {
+      if (!msg.text?.startsWith("/") && !msg.from?.is_bot) await sendWelcome(ctx);
+      return;
+    }
 
     // Считаем только сообщения внутри тем форума (не общий чат/General),
     // и не команды (например /start), и не сообщения самого бота.
