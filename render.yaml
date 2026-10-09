@@ -6,17 +6,15 @@ services:
     healthCheckPath: /healthz
     buildCommand: npm ci --include=dev && npm run build
     startCommand: node dist/bot.js
-    # Бот пересобирается только при изменении кода: правки колод из редактора его не
-    # перезапускают (при старте он берёт свежие колоды с сайта). Так на бесплатном тарифе
-    # не расходуются минуты сборки.
+    # Бот пересобирается только при изменении кода: правки колод его не перезапускают
+    # (при старте он берёт свежие колоды с сайта). Так на бесплатном тарифе не расходуются
+    # минуты сборки.
     buildFilter:
       paths:
         - src/**
         - package.json
         - package-lock.json
         - tsconfig.json
-    # Редактор для учителя включается переменными TEACHER_IDS и GITHUB_TOKEN. Их значения
-    # задаются вручную в панели Render (Environment), в этот файл секреты не пишутся.
     envVars:
       - key: NODE_VERSION
         value: "22"
@@ -28,10 +26,6 @@ services:
         generateValue: true
       - key: WEBAPP_URL
         value: https://chinese-drill-app.onrender.com/
-      - key: GITHUB_REPO
-        value: kopervas0/chinese-drill-bot
-      - key: GITHUB_BRANCH
-        value: master
 
   - type: web
     name: chinese-drill-app
@@ -55,7 +49,3 @@ services:
       - path: /*
         name: Referrer-Policy
         value: no-referrer
-      # страница редактора обращается к серверу бота (адрес и в webapp/js/teacher-config.js)
-      - path: /teacher.html
-        name: Content-Security-Policy
-        value: "default-src 'none'; script-src 'self' https://telegram.org; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self'; connect-src 'self' https://chinese-drill-bot.onrender.com; base-uri 'none'; form-action 'none'"

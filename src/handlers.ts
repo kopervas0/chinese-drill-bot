@@ -195,7 +195,6 @@ export function createBot(
   threshold: number,
   webAppUrl?: string,
   allowedChats?: Set<number>,
-  teacherIds?: Set<number>,
 ): Bot {
   const bot = new Bot(token);
   audioBase = webAppUrl;
@@ -222,24 +221,6 @@ export function createBot(
         reply_markup: new InlineKeyboard().webApp("Открыть тренажёр", webAppUrl),
       }),
     );
-  }
-
-  // Учитель узнаёт свой числовой id, чтобы владелец внёс его в список учителей (TEACHER_IDS).
-  // Бот отвечает только самому пользователю и ничего не сохраняет и не логирует.
-  bot.command("myid", async (ctx) => {
-    if (ctx.chat.type !== "private" || !ctx.from) return;
-    await ctx.reply(`Ваш Telegram id: ${ctx.from.id}\nОн нужен только для добавления в список учителей.`);
-  });
-
-  // Редактор для учителя: команду видят только аккаунты из списка, остальным бот не отвечает.
-  if (webAppUrl && teacherIds && teacherIds.size > 0) {
-    const editorUrl = new URL("teacher.html", webAppUrl).toString();
-    bot.command("teacher", async (ctx) => {
-      if (ctx.chat.type !== "private" || !ctx.from || !teacherIds.has(ctx.from.id)) return;
-      await ctx.reply("Редактор заданий:", {
-        reply_markup: new InlineKeyboard().webApp("Открыть редактор", editorUrl),
-      });
-    });
   }
 
   bot.command("train", async (ctx) => {

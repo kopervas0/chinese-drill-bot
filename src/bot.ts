@@ -1,7 +1,5 @@
 import "dotenv/config";
-import { createApiHandler } from "./api.js";
-import { applyDeckChange, refreshDecksFromSite } from "./flashcards.js";
-import { createGithub } from "./github.js";
+import { refreshDecksFromSite } from "./flashcards.js";
 import { createBot } from "./handlers.js";
 import { createWebhookServer, deriveSecretToken, WEBHOOK_PATH } from "./webhook.js";
 
@@ -31,26 +29,7 @@ if (allowedRaw) {
   allowedChats = new Set(ids);
 }
 
-// Редактор для учителя: id аккаунтов учителей (только сотрудники, не ученики) и доступ
-// к репозиторию, куда сохраняются правки. Включается, только если заданы все переменные.
-const teacherRaw = process.env.TEACHER_IDS?.trim();
-let teacherIds: Set<number> | undefined;
-if (teacherRaw) {
-  const ids = teacherRaw.split(",").map((s) => Number(s.trim()));
-  if (ids.some((n) => !Number.isSafeInteger(n) || n <= 0)) {
-    throw new Error("TEACHER_IDS: ожидаются числовые id аккаунтов Telegram через запятую");
-  }
-  teacherIds = new Set(ids);
-}
-const githubToken = process.env.GITHUB_TOKEN?.trim();
-const githubRepo = process.env.GITHUB_REPO?.trim();
-const githubBranch = process.env.GITHUB_BRANCH?.trim() || "master";
-const editorEnabled = !!(teacherIds && githubToken && githubRepo && webAppUrl);
-if (teacherIds && !editorEnabled) {
-  console.error("Редактор учителя выключен: нужны TEACHER_IDS, GITHUB_TOKEN, GITHUB_REPO и WEBAPP_URL");
-}
-
-const bot = createBot(token, threshold, webAppUrl, allowedChats, editorEnabled ? teacherIds : undefined);
+const bot = createBot(token, threshold, webAppUrl, allowedChats);
 
 if (webAppUrl) {
   bot.api
@@ -76,16 +55,7 @@ if (webhookBase) {
   if (!secret || secret.length < 16) throw new Error("WEBHOOK_SECRET не задан или короче 16 символов");
   const secretToken = deriveSecretToken(secret);
 
-  const api = editorEnabled
-    ? createApiHandler({
-        botToken: token,
-        teacherIds: teacherIds!,
-        github: createGithub({ token: githubToken!, repo: githubRepo!, branch: githubBranch }),
-        allowedOrigin: new URL(webAppUrl!).origin,
-        onDeckChange: applyDeckChange,
-      })
-    : undefined;
-  const server = createWebhookServer(bot, secretToken, api);
+  const server = createWebhookServer(bot, secretToken);
   const port = Number(process.env.PORT ?? 8080);
   await bot.init();
   await new Promise<void>((resolve) => server.listen(port, "0.0.0.0", resolve));
@@ -103,5 +73,5 @@ if (webhookBase) {
   console.log("Бот запущен в режиме polling");
 }
 
-// Свежие колоды с сайта (правки учителя не пересобирают бота); не блокирует запуск.
+// Свежие колоды с сайта (бот пересобирается только при изменении кода); не блокирует запуск.
 if (webAppUrl) void refreshDecksFromSite(webAppUrl);

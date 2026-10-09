@@ -15,7 +15,7 @@ export const MODES = {
 };
 export const MODE_ORDER = ["cards", "quiz", "quizrev", "tones", "match", "listen", "write", "tests", "pairs", "cloze"];
 
-// Свои задания учителя: прогресс «выучено» по ним не ведётся.
+// Свои задания (тесты, пары, пропуски): прогресс «выучено» по ним не ведётся.
 export const isTaskMode = (mode) => mode === "tests" || mode === "pairs" || mode === "cloze";
 
 const MAX_OPTIONS = 4;

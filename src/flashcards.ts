@@ -60,7 +60,7 @@ export type Mode =
   | "pairs"
   | "cloze";
 
-// Свои задания учителя: прогресс "выучено" по ним не ведётся.
+// Свои задания (тесты, пары, пропуски): прогресс "выучено" по ним не ведётся.
 export const isTaskMode = (mode: Mode): boolean => mode === "tests" || mode === "pairs" || mode === "cloze";
 
 export interface Option {
@@ -182,19 +182,8 @@ function dropDeckState(id: string): void {
 }
 
 // Немедленно обновляет колоду в памяти после сохранения из редактора (null — удалить).
-export function applyDeckChange(id: string, file: unknown | null): void {
-  dropDeckState(id);
-  if (file === null) {
-    decks.delete(id);
-    return;
-  }
-  const deck = parseDeck(id, `${id}.json`, file);
-  if (deck) decks.set(id, deck);
-  else decks.delete(id);
-}
-
 // При старте берёт актуальные колоды с сайта мини-приложения: встроенные в сборку колоды
-// могут быть старее, ведь правки учителя не пересобирают бота. Не вышло — остаются встроенные.
+// могут быть старее: бот пересобирается только при изменении кода, а не колод. Не вышло — остаются встроенные.
 export async function refreshDecksFromSite(baseUrl: string): Promise<void> {
   try {
     const get = async (path: string) => {
