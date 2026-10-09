@@ -36,13 +36,15 @@ services:
   - type: web
     name: chinese-drill-app
     runtime: static
-    buildCommand: node scripts/build-webapp.mjs
+    buildCommand: npm ci --include=dev && node scripts/build-webapp.mjs
     staticPublishPath: webapp
     buildFilter:
       paths:
         - webapp/**
         - data/decks/**
         - scripts/build-webapp.mjs
+        - package.json
+        - package-lock.json
     envVars:
       - key: NODE_VERSION
         value: "22"

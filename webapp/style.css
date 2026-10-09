@@ -938,3 +938,8 @@ textarea.codebox:focus {
 .missed .m.plain .p {
   font-weight: 600;
 }
+
+.write-box{width:100%;max-width:300px;aspect-ratio:1;margin:8px auto;border:2px solid var(--line);border-radius:16px;background:var(--surface);touch-action:none;position:relative;overflow:hidden}
+.write-box svg{width:100%;height:100%;display:block}
+.write-acts{display:flex;gap:10px;justify-content:center;margin-top:8px}
+.write-acts .btn{flex:1;max-width:160px}

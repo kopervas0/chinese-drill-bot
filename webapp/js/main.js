@@ -191,7 +191,7 @@ function renderHome() {
       <div><h1>Китайский тренажёр</h1><p>Выберите колоду и потренируйтесь</p></div>
     </header>
     <section class="decks">${cards}</section>
-    <p class="note">Прогресс хранится только на этом устройстве.<br />Код прогресса подходит и для бота командой /code.</p>
+    <p class="note">Прогресс хранится только на этом устройстве.<br />Код прогресса подходит и для бота командой /code.<br />Порядок черт: <a href="https://github.com/chanind/hanzi-writer-data" target="_blank" rel="noopener noreferrer">Hanzi Writer Data</a> (Arphic Public License).</p>
   </div>`;
 }
 
@@ -238,7 +238,7 @@ async function drawSheet() {
     return;
   }
 
-  const opts = { tts: state.tts };
+  const opts = { tts: state.tts, write: !!window.HanziWriter };
   const modes = MODE_ORDER.filter((m) => canStart(deck, m, opts));
   if (!modes.includes(sh.mode)) sh.mode = modes[0];
   const total = eligible(deck, sh.mode).length;
@@ -278,6 +278,7 @@ function begin(deckId, mode, limit) {
   state.deck = deck;
   state.lastRun = { deckId, mode, limit };
   state.finishing = false;
+  state.write = null;
   state.session = createSession(deck, mode, limit || null, knownOf(deck));
   closeSheet();
   renderSession();
@@ -337,6 +338,7 @@ function showQuestion() {
   const stage = freshStage();
   if (isMatchMode(s)) renderMatch(stage);
   else if (s.mode === "cards") renderCard(stage);
+  else if (s.mode === "write") renderWrite(stage);
   else renderChoice(stage);
 }
 
@@ -439,6 +441,121 @@ function answerCard(correct) {
   cw.style.transform = `translateX(${correct ? 120 : -120}%) rotate(${correct ? 16 : -16}deg)`;
   cw.style.opacity = 0;
   setTimeout(advance, 260);
+}
+
+// --- письмо ---
+
+const strokeUrl = (ch) => `strokes/${ch.codePointAt(0).toString(16)}.json`;
+
+function renderWrite(stage) {
+  const card = state.deck.cards[currentIndex(state.session)];
+  const w = { chars: [...card.hanzi], i: 0, mistakes: 0, writer: null, token: 0 };
+  state.write = w;
+  stage.innerHTML = `<div class="center-col">
+      <div class="pinyin">${pinyinHtml(card.pinyin)}</div>
+      <div class="translation">${esc(card.translation)}</div>
+    </div>
+    <div class="prompt-note" id="wnote"></div>
+    <div class="write-box" id="wbox"></div>
+    <div class="write-acts">
+      <button class="btn ghost" data-act="w-hint">Подсказка</button>
+      <button class="btn ghost" data-act="w-show">Показать черты</button>
+    </div>
+    <button class="link" data-act="w-skip" style="margin-top:10px">Не помню, пропустить</button>`;
+  startChar();
+}
+
+function startChar() {
+  const w = state.write;
+  const box = $("#wbox");
+  if (!w || !box) return;
+  const token = ++w.token;
+  box.innerHTML = "";
+  const size = Math.min(300, Math.floor(box.clientWidth) || 300);
+  $("#wnote").textContent = w.chars.length > 1 ? `Иероглиф ${w.i + 1} из ${w.chars.length}: проведите черты по порядку` : "Проведите черты по порядку";
+  w.writer = window.HanziWriter.create(box, w.chars[w.i], {
+    width: size,
+    height: size,
+    padding: 12,
+    showOutline: false,
+    showCharacter: false,
+    showHintAfterMisses: 3,
+    strokeColor: getComputedStyle(document.body).color,
+    outlineColor: "rgba(128,128,128,0.35)",
+    drawingWidth: 18,
+    charDataLoader: (ch, onLoad, onError) => {
+      fetch(strokeUrl(ch))
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error("no data"))))
+        .then(onLoad, onError);
+    },
+    onLoadCharDataError: () => {
+      if (w.token !== token) return;
+      toast("Нет данных о чертах этого иероглифа");
+      w.mistakes += 1;
+      nextChar();
+    },
+  });
+  runQuiz(token);
+}
+
+function runQuiz(token) {
+  const w = state.write;
+  w.writer.quiz({
+    onMistake: () => {
+      if (w.token !== token) return;
+      w.mistakes += 1;
+      haptic.err();
+    },
+    onCorrectStroke: () => {
+      if (w.token === token) haptic.tap();
+    },
+    onComplete: () => {
+      if (w.token !== token) return;
+      haptic.ok();
+      setTimeout(() => w.token === token && nextChar(), 600);
+    },
+  });
+}
+
+function nextChar() {
+  const w = state.write;
+  if (!w) return;
+  w.i += 1;
+  if (w.i < w.chars.length) {
+    startChar();
+    return;
+  }
+  const s = state.session;
+  record(s, w.mistakes === 0);
+  state.write = null;
+  advance();
+}
+
+function writeHint() {
+  state.write?.writer?.showOutline();
+}
+
+function writeShow() {
+  const w = state.write;
+  if (!w?.writer) return;
+  const token = w.token;
+  w.mistakes += 1;
+  w.writer.cancelQuiz();
+  w.writer.animateCharacter({
+    onComplete: () => {
+      if (w.token === token) runQuiz(token);
+    },
+  });
+}
+
+function writeSkip() {
+  const w = state.write;
+  if (!w) return;
+  w.mistakes += 1;
+  w.token += 1;
+  w.writer?.cancelQuiz();
+  w.i = w.chars.length - 1;
+  nextChar();
 }
 
 // --- квиз, тоны, на слух ---
@@ -752,6 +869,9 @@ const actions = {
   know: () => answerCard(true),
   pick: (el) => pick(Number(el.dataset.i)),
   next: () => advance(),
+  "w-hint": () => writeHint(),
+  "w-show": () => writeShow(),
+  "w-skip": () => writeSkip(),
   tile: (el) => onTile(el.dataset.side, Number(el.dataset.pos)),
   speak: (el) => speak(el.dataset.t),
   play: (el) => playClip(el.dataset.src),

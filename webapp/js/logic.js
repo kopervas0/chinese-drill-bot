@@ -8,11 +8,12 @@ export const MODES = {
   tones: { label: "Тоны", hint: "Выберите верный пиньинь", glyph: "声" },
   match: { label: "Найди пары", hint: "Иероглиф ↔ перевод", glyph: "配" },
   listen: { label: "На слух", hint: "Услышьте и выберите перевод", glyph: "听" },
+  write: { label: "Письмо", hint: "Напишите иероглиф по чертам", glyph: "写" },
   tests: { label: "Тесты", hint: "Вопросы с вариантами ответа", glyph: "测" },
   pairs: { label: "Свои пары", hint: "Соедините подходящие", glyph: "对" },
   cloze: { label: "Заполни пропуск", hint: "Выберите пропущенное слово", glyph: "填" },
 };
-export const MODE_ORDER = ["cards", "quiz", "quizrev", "tones", "match", "listen", "tests", "pairs", "cloze"];
+export const MODE_ORDER = ["cards", "quiz", "quizrev", "tones", "match", "listen", "write", "tests", "pairs", "cloze"];
 
 // Свои задания учителя: прогресс «выучено» по ним не ведётся.
 export const isTaskMode = (mode) => mode === "tests" || mode === "pairs" || mode === "cloze";
@@ -162,6 +163,7 @@ export function eligible(deck, mode) {
   if (mode === "cloze") return deck.cloze.map((_, i) => i);
   return deck.cards.flatMap((card, i) => {
     if (mode === "tones") return hasTones(card.pinyin) ? [i] : [];
+    if (mode === "write") return /^[一-鿿㐀-䶿]+$/u.test(card.hanzi) ? [i] : [];
     return [i];
   });
 }
@@ -169,6 +171,7 @@ export function eligible(deck, mode) {
 export function canStart(deck, mode, opts = {}) {
   const n = eligible(deck, mode).length;
   if (mode === "listen") return !!opts.tts && n >= 2;
+  if (mode === "write") return !!opts.write && n >= 1;
   if (mode === "cards" || mode === "tones" || mode === "tests" || mode === "cloze") return n >= 1;
   return n >= 2;
 }
